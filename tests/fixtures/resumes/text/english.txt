@@ -1,0 +1,19 @@
+John Doe
+Senior Software Engineer
+
+Education
+MIT | Computer Science | 2020-2024
+
+Experience
+TechCorp | Senior Engineer | 2024-present
+- Designed and implemented microservices architecture
+- Built REST APIs using FastAPI and PostgreSQL
+- Led team of 5 engineers on cloud migration project
+
+Projects
+Distributed Task Scheduler
+- Built a distributed task scheduling system handling 10M+ tasks/day
+- Implemented priority queues with Redis sorted sets
+- Designed fault-tolerant retry mechanism with exponential backoff
+
+Skills: Python, Go, FastAPI, PostgreSQL, Redis, Docker, Kubernetes, Terraform

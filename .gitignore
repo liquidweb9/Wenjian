@@ -1,0 +1,85 @@
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+config.env
+config.*.env
+!config.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Local agent / editor metadata
+.agents/
+.claude/
+.claude-plugin/
+.codex/
+skills-lock.json
+.idea/
+.vscode/
+*.code-workspace
+*.swp
+*.swo
+*~
+
+# Python caches, environments, coverage and packages
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyright/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.venv/
+venv/
+env/
+ENV/
+*.egg-info/
+.eggs/
+build/
+site/
+
+# Node / frontend dependencies and generated output
+node_modules/
+.pnpm-store/
+.npm/
+.yarn/
+.parcel-cache/
+.vite/
+dist/
+coverage/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Logs, runtime state and local databases
+*.log
+logs/
+*.pid
+*.sqlite
+*.sqlite3
+*.db
+.cache/
+tmp/
+temp/
+
+# OS metadata
+.DS_Store
+.AppleDouble
+Thumbs.db
+Desktop.ini
+
+# Local screenshots and diagnostic helpers
+prom/
+_check_db.py

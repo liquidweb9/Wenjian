@@ -1,0 +1,8 @@
+<svg width="64" height="64" viewBox="0 0 290 215" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="navy" x1="22" y1="18" x2="287" y2="193" gradientUnits="userSpaceOnUse"><stop stop-color="#061A33"/><stop offset="1" stop-color="#0D2B55"/></linearGradient>
+    <linearGradient id="teal" x1="108" y1="18" x2="200" y2="108" gradientUnits="userSpaceOnUse"><stop stop-color="#0A8D86"/><stop offset="1" stop-color="#22C1C3"/></linearGradient>
+  </defs>
+  <path d="M22 30v4l68 151 11 8h21l7-3 23-33 22 33 7 3h25l6-3 8-11 67-146-1-4-5-3h-26l-5 2-6 6-55 125-35-56-17 24v3l12 21-14 9-11 1-4-2-5-7L64 32l-9-6H27z" fill="url(#navy)" fill-rule="evenodd"/>
+  <path d="m151 58-3 3-1 5 4 5h6l3-3 1-5-4-5zm-21-34-13 12-8 17-1 17 2 9 4 9 5 7 7 6 1 5h1v-2l7-12-8-8-5-10-1-15 3-9 3-5 8-8 7-4 7-2 14 1 9 4 9 9 4 7 2 7v11l-3 9-3 5-9 8v3l7 13 1-5 8-7 6-8 5-12 1-18-5-16-7-10-7-6-15-7-20-1z" fill="url(#teal)" fill-rule="evenodd"/>
+</svg>

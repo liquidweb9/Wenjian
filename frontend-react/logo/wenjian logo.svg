@@ -1,0 +1,191 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1448" height="1086" viewBox="0 0 1448 1086" role="img" aria-labelledby="title desc">
+<title id="title">Wenjian brand system</title>
+<desc id="desc">Editable vector brand guide for the Wenjian AI interview platform.</desc>
+<metadata>{"name": "Wenjian Brand System", "source": "corrected board image", "agent_editable": true, "groups": ["hero", "logo-explanation", "horizontal-lockup", "icon-only", "color-palette", "typography", "ui-components"], "tokens": {"primary_navy": "#0D1B2A", "secondary_teal": "#0EA5A0", "accent_cyan": "#22C1C3", "background": "#F7F8FA", "surface": "#FFFFFF", "text_primary": "#0F172A", "text_secondary": "#475569", "border": "#E2E8F0", "success": "#16A34A", "warning": "#F59E0B", "error": "#EF4444", "info": "#2563EB"}}</metadata>
+<defs>
+  <linearGradient id="navyGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#061A33"/><stop offset="1" stop-color="#0D2B55"/></linearGradient>
+  <linearGradient id="tealGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0A8D86"/><stop offset="1" stop-color="#22C1C3"/></linearGradient>
+  <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="4" stdDeviation="7" flood-color="#0D1B2A" flood-opacity=".08"/></filter>
+  <symbol id="wenjian-mark" viewBox="0 0 290 215">
+    <path d="M 22 30 L 22 34 L 90 185 L 101 193 L 122 193 L 129 190 L 152 157 L 174 190 L 181 193 L 206 193 L 212 190 L 220 179 L 287 33 L 286 29 L 281 26 L 255 26 L 250 28 L 244 34 L 189 159 L 154 103 L 137 127 L 137 130 L 149 151 L 135 160 L 124 161 L 120 159 L 115 152 L 64 32 L 55 26 L 27 26 Z" fill="url(#navyGrad)" fill-rule="evenodd"/>
+    <path d="M 151 58 L 148 61 L 147 66 L 151 71 L 157 71 L 160 68 L 161 63 L 157 58 Z M 130 24 L 117 36 L 109 53 L 108 70 L 110 79 L 114 88 L 119 95 L 126 101 L 127 106 L 128 106 L 128 104 L 135 92 L 127 84 L 122 74 L 121 59 L 124 50 L 127 45 L 135 37 L 142 33 L 149 31 L 163 32 L 172 36 L 181 45 L 185 52 L 187 59 L 187 70 L 184 79 L 181 84 L 172 92 L 172 95 L 179 108 L 180 103 L 188 96 L 194 88 L 199 76 L 200 58 L 195 42 L 188 32 L 181 26 L 166 19 L 146 18 Z" fill="url(#tealGrad)" fill-rule="evenodd"/>
+  </symbol>
+  <symbol id="wenjian-w" viewBox="0 0 290 215">
+    <path d="M 22 30 L 22 34 L 90 185 L 101 193 L 122 193 L 129 190 L 152 157 L 174 190 L 181 193 L 206 193 L 212 190 L 220 179 L 287 33 L 286 29 L 281 26 L 255 26 L 250 28 L 244 34 L 189 159 L 154 103 L 137 127 L 137 130 L 149 151 L 135 160 L 124 161 L 120 159 L 115 152 L 64 32 L 55 26 L 27 26 Z" fill="currentColor" fill-rule="evenodd"/>
+  </symbol>
+  <symbol id="conversation-mark" viewBox="0 0 290 215">
+    <path d="M 151 58 L 148 61 L 147 66 L 151 71 L 157 71 L 160 68 L 161 63 L 157 58 Z M 130 24 L 117 36 L 109 53 L 108 70 L 110 79 L 114 88 L 119 95 L 126 101 L 127 106 L 128 106 L 128 104 L 135 92 L 127 84 L 122 74 L 121 59 L 124 50 L 127 45 L 135 37 L 142 33 L 149 31 L 163 32 L 172 36 L 181 45 L 185 52 L 187 59 L 187 70 L 184 79 L 181 84 L 172 92 L 172 95 L 179 108 L 180 103 L 188 96 L 194 88 L 199 76 L 200 58 L 195 42 L 188 32 L 181 26 L 166 19 L 146 18 Z" fill="currentColor" fill-rule="evenodd"/>
+  </symbol>
+  <style>
+    .ui{font-family:Inter,"Noto Sans CJK SC","Microsoft YaHei",Arial,sans-serif;fill:#0F172A}
+    .small{font-size:12px}
+    .tiny{font-size:10px}
+    .section{font-size:13px;font-weight:600;letter-spacing:.8px;fill:#334155}
+    .muted{fill:#475569}
+    .bold{font-weight:700}
+    .semibold{font-weight:600}
+    .card{fill:#fff;stroke:#E2E8F0;stroke-width:1.5}
+    .divider{stroke:#E2E8F0;stroke-width:1}
+  </style>
+</defs>
+<rect id="page-background" width="1448" height="1086" fill="#F7F8FA"/>
+<rect width="1448" height="1086" fill="#FFFFFF" opacity=".82"/>
+
+<g id="hero" class="ui">
+  <use id="hero-logo" href="#wenjian-mark" x="45" y="55" width="275" height="204"/>
+  <text id="hero-wordmark" x="350" y="177" font-size="72" font-weight="700" letter-spacing="-2">Wenjian</text>
+  <text id="hero-cn" x="360" y="242" font-size="40" font-family="Noto Serif CJK SC,serif">问 鉴</text>
+  <line x1="70" y1="310" x2="70" y2="397" stroke="#0EA5A0" stroke-width="3"/>
+  <text x="110" y="330" font-size="15" font-weight="700" letter-spacing="1.3" fill="#0EA5A0">AI INTERVIEW PLATFORM</text>
+  <text x="110" y="367" font-size="14" fill="#334155">Resume-grounded questioning, evaluation,</text>
+  <text x="110" y="395" font-size="14" fill="#334155">and evidence-based feedback.</text>
+</g>
+<g id="logo-explanation" class="ui">
+  <text x="748" y="57" class="section">LOGO EXPLANATION</text>
+  <line x1="748" y1="78" x2="1374" y2="78" class="divider"/>
+  <g id="conversation-question">
+    <use href="#conversation-mark" x="760" y="92" width="92" height="68" style="color:#0EA5A0"/>
+    <text x="806" y="196" text-anchor="middle" font-size="14" font-weight="700">Conversation / Question</text>
+    <text x="806" y="220" text-anchor="middle" class="small muted">Represents AI interviews</text>
+    <text x="806" y="239" text-anchor="middle" class="small muted">and purposeful dialogue.</text>
+  </g>
+  <text x="947" y="149" font-size="31" fill="#94A3B8">+</text>
+  <g id="letter-w">
+    <use href="#wenjian-w" x="992" y="87" width="140" height="103" style="color:#0D1B2A"/>
+    <text x="1062" y="196" text-anchor="middle" font-size="14" font-weight="700">Letter W</text>
+    <text x="1062" y="220" text-anchor="middle" class="small muted">Stands for Wenjian</text>
+    <text x="1062" y="239" text-anchor="middle" class="small muted">and our worldview.</text>
+  </g>
+  <text x="1176" y="149" font-size="31" fill="#94A3B8">+</text>
+  <g id="insight-evaluation">
+    <circle cx="1287" cy="129" r="36" fill="none" stroke="#0EA5A0" stroke-width="9"/>
+    <path d="M1268 143v-18 M1281 143v-30 M1294 143v-23 M1307 143v-38" stroke="#0EA5A0" stroke-width="7" stroke-linecap="round"/>
+    <text x="1287" y="196" text-anchor="middle" font-size="14" font-weight="700">Insight / Evaluation</text>
+    <text x="1287" y="220" text-anchor="middle" class="small muted">Signals assessment,</text>
+    <text x="1287" y="239" text-anchor="middle" class="small muted">insight, and evidence.</text>
+  </g>
+  <line x1="748" y1="271" x2="1374" y2="271" class="divider"/>
+</g>
+<g id="logo-lockups" class="ui">
+  <text x="748" y="306" class="section">HORIZONTAL LOCKUP</text>
+  <rect x="748" y="321" width="330" height="101" rx="13" class="card"/>
+  <use href="#wenjian-mark" x="766" y="327" width="102" height="76"/>
+  <text x="882" y="382" font-size="35" font-weight="700">Wenjian</text>
+  <text x="1006" y="382" font-size="21" font-family="Noto Serif CJK SC,serif">问鉴</text>
+  <text x="1110" y="306" class="section">ICON ONLY</text>
+  <rect x="1110" y="321" width="107" height="101" rx="13" class="card"/>
+  <use href="#wenjian-mark" x="1124" y="332" width="80" height="59"/>
+  <rect x="1250" y="321" width="107" height="101" rx="15" fill="#0D1B2A"/>
+  <use href="#wenjian-w" x="1263" y="333" width="82" height="61" style="color:#FFFFFF"/>
+  <use href="#conversation-mark" x="1271" y="337" width="66" height="49" style="color:#FFFFFF"/>
+</g>
+<line x1="50" y1="452" x2="1395" y2="452" class="divider"/>
+<g id="color-palette" class="ui">
+  <text x="52" y="478" class="section">COLOR PALETTE (FRONTEND)</text>
+  <text x="52" y="504" class="small bold">Brand Colors</text>
+  <rect x="52" y="515" width="118" height="64" rx="6" fill="#0D1B2A"/>
+  <rect x="196" y="515" width="118" height="64" rx="6" fill="url(#tealGrad)"/>
+  <rect x="340" y="515" width="118" height="64" rx="6" fill="#22C1C3"/>
+  <text x="52" y="598" class="tiny">Primary Navy</text><text x="52" y="615" class="tiny muted">#0D1B2A</text>
+  <text x="196" y="598" class="tiny">Secondary Teal</text><text x="196" y="615" class="tiny muted">#0EA5A0</text>
+  <text x="340" y="598" class="tiny">Accent Cyan</text><text x="340" y="615" class="tiny muted">#22C1C3</text>
+
+  <text x="52" y="640" class="small bold">Neutrals</text>
+  <rect x="52" y="652" width="88" height="49" rx="6" fill="#F7F8FA" stroke="#CBD5E1"/>
+  <rect x="165" y="652" width="88" height="49" rx="6" fill="#FFFFFF" stroke="#CBD5E1"/>
+  <rect x="278" y="652" width="88" height="49" rx="6" fill="#0F172A"/>
+  <rect x="391" y="652" width="88" height="49" rx="6" fill="#475569"/>
+  <rect x="504" y="652" width="88" height="49" rx="6" fill="#E2E8F0"/>
+  <text x="52" y="720" class="tiny">Background</text><text x="52" y="737" class="tiny muted">#F7F8FA</text>
+  <text x="165" y="720" class="tiny">Surface</text><text x="165" y="737" class="tiny muted">#FFFFFF</text>
+  <text x="278" y="720" class="tiny">Text Primary</text><text x="278" y="737" class="tiny muted">#0F172A</text>
+  <text x="391" y="720" class="tiny">Text Secondary</text><text x="391" y="737" class="tiny muted">#475569</text>
+  <text x="504" y="720" class="tiny">Border</text><text x="504" y="737" class="tiny muted">#E2E8F0</text>
+
+  <text x="52" y="761" class="small bold">Semantic Colors</text>
+  <rect x="52" y="772" width="50" height="29" rx="5" fill="#16A34A"/>
+  <rect x="188" y="772" width="50" height="29" rx="5" fill="#F59E0B"/>
+  <rect x="325" y="772" width="50" height="29" rx="5" fill="#EF4444"/>
+  <rect x="462" y="772" width="50" height="29" rx="5" fill="#2563EB"/>
+  <text x="110" y="783" class="tiny">Success</text><text x="110" y="799" class="tiny muted">#16A34A</text>
+  <text x="246" y="783" class="tiny">Warning</text><text x="246" y="799" class="tiny muted">#F59E0B</text>
+  <text x="383" y="783" class="tiny">Error</text><text x="383" y="799" class="tiny muted">#EF4444</text>
+  <text x="520" y="783" class="tiny">Info</text><text x="520" y="799" class="tiny muted">#2563EB</text>
+</g>
+<g id="typography" class="ui">
+  <text x="712" y="478" class="section">TYPOGRAPHY</text>
+  <line x1="712" y1="493" x2="1374" y2="493" class="divider"/>
+  <text x="710" y="610" font-size="103" font-weight="700">Aa</text>
+  <line x1="850" y1="528" x2="850" y2="657" class="divider"/>
+  <text x="890" y="560" font-size="29" font-weight="700">Inter</text>
+  <text x="890" y="589" font-size="13" letter-spacing=".7">ABCDEFGHIJKLMNOPQRSTUVWXYZ</text>
+  <text x="890" y="617" font-size="13" letter-spacing=".7">abcdefghijklmnopqrstuvwxyz</text>
+  <text x="890" y="646" font-size="13" letter-spacing="1">0123456789</text>
+  <line x1="1165" y1="512" x2="1165" y2="702" class="divider"/>
+  <text x="1192" y="533" font-size="14" font-weight="700">Heading (H1–H3)</text>
+  <text x="1192" y="555" class="small muted">Inter SemiBold / Bold</text>
+  <text x="1192" y="586" font-size="14" font-weight="700">Body</text>
+  <text x="1192" y="608" class="small muted">Inter Regular</text>
+  <text x="1192" y="638" font-size="14" font-weight="700">Small / UI</text>
+  <text x="1192" y="660" class="small muted">Inter Regular</text>
+  <text x="1192" y="690" font-size="14" font-weight="700">Mono</text>
+  <text x="1192" y="712" class="small muted" font-family="JetBrains Mono,monospace">JetBrains Mono Regular</text>
+</g>
+<line x1="50" y1="818" x2="1395" y2="818" class="divider"/>
+<g id="ui-components" class="ui">
+  <text x="52" y="845" class="section">UI COLOR APPLICATION</text>
+  <line x1="282" y1="835" x2="282" y2="1040" class="divider"/>
+  <rect x="48" y="864" width="204" height="41" rx="6" fill="#0D1B2A"/>
+  <text x="150" y="890" text-anchor="middle" font-size="12" fill="#FFFFFF">Primary Button</text>
+  <rect x="48" y="921" width="204" height="41" rx="6" fill="url(#tealGrad)"/>
+  <text x="150" y="947" text-anchor="middle" font-size="12" fill="#FFFFFF">Secondary Button</text>
+  <rect x="48" y="978" width="204" height="41" rx="6" fill="#FFFFFF" stroke="#0EA5A0" stroke-width="1.5"/>
+  <text x="150" y="1004" text-anchor="middle" font-size="12" fill="#0EA5A0">Ghost Button</text>
+
+  <text x="310" y="845" class="small bold">Backgrounds</text>
+  <rect x="310" y="864" width="212" height="41" rx="6" class="card"/>
+  <rect x="310" y="921" width="212" height="41" rx="6" class="card"/>
+  <rect x="310" y="978" width="212" height="41" rx="6" class="card"/>
+  <text x="416" y="890" text-anchor="middle" class="small">Page Background</text>
+  <text x="416" y="947" text-anchor="middle" class="small">Section Background</text>
+  <text x="416" y="1004" text-anchor="middle" class="small">Surface / Card Background</text>
+
+  <line x1="550" y1="835" x2="550" y2="1040" class="divider"/>
+  <text x="580" y="845" class="small bold">Cards</text>
+  <rect x="580" y="864" width="220" height="155" rx="10" class="card" filter="url(#softShadow)"/>
+  <text x="596" y="892" font-size="15" font-weight="700">Candidate Summary</text>
+  <circle cx="600" cy="913" r="4" fill="#16A34A"/>
+  <text x="614" y="918" class="small">Strong Match</text>
+  <rect x="596" y="934" width="180" height="8" rx="4" fill="#E2E8F0"/>
+  <rect x="596" y="951" width="157" height="8" rx="4" fill="#E2E8F0"/>
+  <rect x="596" y="968" width="118" height="8" rx="4" fill="#E2E8F0"/>
+  <text x="596" y="1005" font-size="12" fill="#0EA5A0" font-weight="600">View Evidence →</text>
+
+  <line x1="825" y1="835" x2="825" y2="1040" class="divider"/>
+  <text x="856" y="845" class="small bold">Borders &amp; Dividers</text>
+  <rect x="856" y="864" width="204" height="155" rx="10" class="card"/>
+  <text x="873" y="893" class="small muted">Default Border</text>
+  <line x1="873" y1="907" x2="1042" y2="907" stroke="#CBD5E1"/>
+  <text x="873" y="938" class="small muted">Subtle Divider</text>
+  <line x1="873" y1="952" x2="1042" y2="952" stroke="#E2E8F0" stroke-dasharray="4 3"/>
+  <text x="873" y="984" class="small muted">Focus State</text>
+  <line x1="873" y1="1001" x2="1042" y2="1001" stroke="#0EA5A0" stroke-width="2"/>
+
+  <line x1="1085" y1="835" x2="1085" y2="1040" class="divider"/>
+  <text x="1115" y="845" class="small bold">Status Colors in Use</text>
+  <g>
+    <rect x="1115" y="864" width="239" height="36" rx="8" fill="#F0FDF4" stroke="#BBF7D0"/>
+    <circle cx="1134" cy="882" r="8" fill="#16A34A"/><path d="M1130 882l3 3 5-7" stroke="#fff" stroke-width="2" fill="none"/>
+    <text x="1152" y="887" class="small" fill="#15803D">Success</text><text x="1338" y="887" text-anchor="end" class="tiny">Completed</text>
+    <rect x="1115" y="906" width="239" height="36" rx="8" fill="#FFFBEB" stroke="#FDE68A"/>
+    <path d="M1134 915l9 16h-18z" fill="#F59E0B"/><text x="1134" y="928" text-anchor="middle" font-size="10" fill="#fff" font-weight="700">!</text>
+    <text x="1152" y="929" class="small" fill="#D97706">Warning</text><text x="1338" y="929" text-anchor="end" class="tiny">Needs Review</text>
+    <rect x="1115" y="948" width="239" height="36" rx="8" fill="#FEF2F2" stroke="#FECACA"/>
+    <circle cx="1134" cy="966" r="8" fill="#EF4444"/><text x="1134" y="970" text-anchor="middle" font-size="11" fill="#fff" font-weight="700">!</text>
+    <text x="1152" y="971" class="small" fill="#DC2626">Error</text><text x="1338" y="971" text-anchor="end" class="tiny">Action Required</text>
+    <rect x="1115" y="990" width="239" height="36" rx="8" fill="#EFF6FF" stroke="#BFDBFE"/>
+    <circle cx="1134" cy="1008" r="8" fill="#2563EB"/><text x="1134" y="1012" text-anchor="middle" font-size="11" fill="#fff" font-weight="700">i</text>
+    <text x="1152" y="1013" class="small" fill="#2563EB">Info</text><text x="1338" y="1013" text-anchor="end" class="tiny">For Your Info</text>
+  </g>
+</g>
+</svg>
