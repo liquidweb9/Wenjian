@@ -64,20 +64,7 @@
 
 ## 🪄 一次完整面试如何发生
 
-```mermaid
-flowchart LR
-    A["上传简历"] --> B["解析与人工确认"]
-    B --> C["Profile + Claims"]
-    C --> D["生成项目级 InterviewPlan"]
-    D --> E["动态提问"]
-    E --> F["回答分析"]
-    F --> G["六维评分"]
-    G --> H["证据更新 + 教练反馈"]
-    H --> I{"下一步？"}
-    I -->|"继续深挖 / 澄清 / 提高难度"| E
-    I -->|"切换 Claim / 项目"| E
-    I -->|"覆盖完成 / 主动结束"| J["最终报告"]
-```
+<img src=./fig/wenjian_procedure.png>
 
 ## 🧩 技术架构
 
