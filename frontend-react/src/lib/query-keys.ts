@@ -22,4 +22,14 @@ export const queryKeys = {
     summary: ["analytics", "summary"] as const,
     trends: ["analytics", "trends"] as const,
   },
+  evidence: {
+    all: ["evidence"] as const,
+    verificationPoints: (claimId: string) => ["evidence", "verification-points", claimId] as const,
+    transitions: (verificationPointId: string) => ["evidence", "transitions", verificationPointId] as const,
+    contradictions: (interviewId: string, status?: string) => {
+      const base = ["evidence", "contradictions", interviewId] as const
+      return status ? ([...base, status] as const) : base
+    },
+    evidence: (verificationPointId: string) => ["evidence", "evidence", verificationPointId] as const,
+  },
 }

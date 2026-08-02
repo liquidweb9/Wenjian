@@ -24,6 +24,12 @@ class LLMError(AppError):
         super().__init__(code, message, status_code)
 
 
+class PermissionDeniedError(AppError):
+    """Raised when user lacks permission to access a resource (M2.6)."""
+    def __init__(self, message: str = "Permission denied"):
+        super().__init__("PERMISSION_DENIED", message, status_code=403)
+
+
 # Error codes
 RESUME_EMPTY = "RESUME_EMPTY"
 RESUME_TOO_LARGE = "RESUME_TOO_LARGE"

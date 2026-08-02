@@ -26,6 +26,7 @@ class InterviewState(TypedDict):
     current_verification_point_id: str | None
     current_depth: int
     current_question: dict | None
+    current_question_form: str | None  # M2.4: Current question form type
 
     # History
     questions: list[dict]
@@ -39,6 +40,10 @@ class InterviewState(TypedDict):
     evidence_items: list[dict]
     coverage: dict[str, float]
     ability_profile: dict[str, float]
+
+    # M2.4: Multi-form verification tracking
+    question_form_history: dict[str, list[str]]  # competency_code -> list of forms used
+    competency_targets: dict[str, Any]  # competency_code -> {importance, target_forms, coverage}
 
     # Flow control
     turn_count: int

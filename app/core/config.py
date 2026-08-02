@@ -32,5 +32,10 @@ class Settings(BaseSettings):
     max_upload_size_mb: int = 5
     max_pdf_pages: int = 10
 
+    # Authentication (M2.6)
+    jwt_secret_key: str = "dev-secret-key-change-in-production"
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_expire_days: int = 30
+
 
 settings = Settings()

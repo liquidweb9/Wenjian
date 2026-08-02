@@ -1,0 +1,317 @@
+"""Job Target API endpoints."""
+
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.ids import new_id
+from app.persistence.database import get_session
+from app.persistence.models import JobTarget, JobRequirement, Competency
+from app.job_target.jd_parser import JDParser, JDParseResult
+from app.llm.agnes_api import AgnesGateway
+
+router = APIRouter(prefix="/job-targets", tags=["job-targets"])
+
+
+# ============================================================
+# Request/Response Models
+# ============================================================
+
+class RequirementCreate(BaseModel):
+    """Request model for creating a requirement."""
+    competency_code: str
+    title: str
+    description: str | None = None
+    importance: float = Field(ge=0.0, le=1.0)
+    expected_level: int = Field(ge=1, le=5)
+    evidence_expectation: list[str] = Field(min_length=2)
+
+
+class JobTargetCreate(BaseModel):
+    """Request model for creating a job target."""
+    title: str
+    level: str = Field(pattern="^(intern|junior|mid|senior|staff)$")
+    interview_round: str = Field(
+        default="technical",
+        pattern="^(resume|project|technical|system_design)$"
+    )
+    description: str | None = None
+    source: str = Field(default="manual", pattern="^(template|pasted_jd|manual)$")
+    raw_jd: str | None = None
+    requirements: list[RequirementCreate]
+
+
+class ParseJDRequest(BaseModel):
+    """Request model for parsing JD text."""
+    jd_text: str = Field(min_length=10)
+
+
+class RequirementResponse(BaseModel):
+    """Response model for a requirement."""
+    requirement_id: str
+    competency_code: str
+    title: str
+    description: str | None
+    importance: float
+    expected_level: int
+    evidence_expectation: list[str]
+
+    class Config:
+        from_attributes = True
+
+
+class JobTargetResponse(BaseModel):
+    """Response model for a job target."""
+    job_target_id: str
+    title: str
+    level: str
+    interview_round: str
+    description: str | None
+    source: str
+    raw_jd: str | None
+    requirements: list[RequirementResponse]
+    created_at: str
+
+    class Config:
+        from_attributes = True
+
+
+class ParseJDResponse(BaseModel):
+    """Response model for JD parsing."""
+    requirements: list[RequirementCreate]
+    inferred_level: str | None
+    inferred_round: str | None
+
+
+# ============================================================
+# Endpoints
+# ============================================================
+
+@router.post("", response_model=JobTargetResponse, status_code=status.HTTP_201_CREATED)
+async def create_job_target(
+    data: JobTargetCreate,
+    db: Annotated[AsyncSession, Depends(get_session)],
+):
+    """Create a new job target with requirements.
+
+    Args:
+        data: Job target creation data
+        db: Database session
+
+    Returns:
+        Created job target with requirements
+    """
+    # Create job target
+    job_target = JobTarget(
+        job_target_id=new_id("jt"),
+        title=data.title,
+        level=data.level,
+        interview_round=data.interview_round,
+        description=data.description,
+        source=data.source,
+        raw_jd=data.raw_jd,
+    )
+    db.add(job_target)
+
+    # Create requirements
+    for req_data in data.requirements:
+        requirement = JobRequirement(
+            requirement_id=new_id("req"),
+            job_target_id=job_target.job_target_id,
+            competency_code=req_data.competency_code,
+            title=req_data.title,
+            description=req_data.description,
+            importance=req_data.importance,
+            expected_level=req_data.expected_level,
+            evidence_expectation=req_data.evidence_expectation,
+        )
+        db.add(requirement)
+
+    await db.commit()
+    await db.refresh(job_target)
+
+    # Build response
+    return JobTargetResponse(
+        job_target_id=job_target.job_target_id,
+        title=job_target.title,
+        level=job_target.level,
+        interview_round=job_target.interview_round,
+        description=job_target.description,
+        source=job_target.source,
+        raw_jd=job_target.raw_jd,
+        requirements=[
+            RequirementResponse(
+                requirement_id=req.requirement_id,
+                competency_code=req.competency_code,
+                title=req.title,
+                description=req.description,
+                importance=req.importance,
+                expected_level=req.expected_level,
+                evidence_expectation=req.evidence_expectation,
+            )
+            for req in job_target.requirements
+        ],
+        created_at=job_target.created_at.isoformat(),
+    )
+
+
+@router.get("/{job_target_id}", response_model=JobTargetResponse)
+async def get_job_target(
+    job_target_id: str,
+    db: Annotated[AsyncSession, Depends(get_session)],
+):
+    """Get a job target by ID.
+
+    Args:
+        job_target_id: Job target ID
+        db: Database session
+
+    Returns:
+        Job target with requirements
+
+    Raises:
+        HTTPException: 404 if job target not found
+    """
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+
+    stmt = (
+        select(JobTarget)
+        .where(JobTarget.job_target_id == job_target_id)
+        .options(selectinload(JobTarget.requirements))
+    )
+    result = await db.execute(stmt)
+    job_target = result.scalar_one_or_none()
+
+    if not job_target:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job target {job_target_id} not found",
+        )
+
+    return JobTargetResponse(
+        job_target_id=job_target.job_target_id,
+        title=job_target.title,
+        level=job_target.level,
+        interview_round=job_target.interview_round,
+        description=job_target.description,
+        source=job_target.source,
+        raw_jd=job_target.raw_jd,
+        requirements=[
+            RequirementResponse(
+                requirement_id=req.requirement_id,
+                competency_code=req.competency_code,
+                title=req.title,
+                description=req.description,
+                importance=req.importance,
+                expected_level=req.expected_level,
+                evidence_expectation=req.evidence_expectation,
+            )
+            for req in job_target.requirements
+        ],
+        created_at=job_target.created_at.isoformat(),
+    )
+
+
+@router.post("/{job_target_id}/parse-jd", response_model=ParseJDResponse)
+async def parse_jd(
+    job_target_id: str,
+    data: ParseJDRequest,
+    db: Annotated[AsyncSession, Depends(get_session)],
+):
+    """Parse JD text and extract structured requirements.
+
+    This is a helper endpoint for users editing job targets.
+    It parses JD text but doesn't save - user can review and edit before saving.
+
+    Args:
+        job_target_id: Job target ID (for context, not used currently)
+        data: JD text to parse
+        db: Database session
+
+    Returns:
+        Parsed requirements (not saved)
+    """
+    # Create LLM gateway
+    gateway = AgnesGateway()
+
+    # Parse JD
+    parser = JDParser(llm=gateway)
+    try:
+        result = await parser.parse_jd(data.jd_text)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+
+    # Convert to response format
+    return ParseJDResponse(
+        requirements=[
+            RequirementCreate(
+                competency_code=req.competency_code,
+                title=req.title,
+                description=req.description,
+                importance=req.importance,
+                expected_level=req.expected_level,
+                evidence_expectation=req.evidence_expectation,
+            )
+            for req in result.requirements
+        ],
+        inferred_level=result.inferred_level,
+        inferred_round=result.inferred_round,
+    )
+
+
+@router.get("", response_model=list[JobTargetResponse])
+async def list_job_targets(
+    db: Annotated[AsyncSession, Depends(get_session)],
+    level: str | None = None,
+):
+    """List all job targets.
+
+    Args:
+        db: Database session
+        level: Optional filter by level
+
+    Returns:
+        List of job targets
+    """
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+
+    stmt = select(JobTarget).options(selectinload(JobTarget.requirements))
+
+    if level:
+        stmt = stmt.where(JobTarget.level == level)
+
+    result = await db.execute(stmt)
+    job_targets = result.scalars().all()
+
+    return [
+        JobTargetResponse(
+            job_target_id=jt.job_target_id,
+            title=jt.title,
+            level=jt.level,
+            interview_round=jt.interview_round,
+            description=jt.description,
+            source=jt.source,
+            raw_jd=jt.raw_jd,
+            requirements=[
+                RequirementResponse(
+                    requirement_id=req.requirement_id,
+                    competency_code=req.competency_code,
+                    title=req.title,
+                    description=req.description,
+                    importance=req.importance,
+                    expected_level=req.expected_level,
+                    evidence_expectation=req.evidence_expectation,
+                )
+                for req in jt.requirements
+            ],
+            created_at=jt.created_at.isoformat(),
+        )
+        for jt in job_targets
+    ]

@@ -1,4 +1,5 @@
 import { useParams } from "react-router-dom"
+import { useState } from "react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { BrandMark } from "@/components/brand/BrandLogo"
@@ -8,6 +9,10 @@ import { useReport } from "../hooks/use-report"
 import { useInterview } from "@/features/interviews/hooks/use-interviews"
 import { usePageTitle } from "@/lib/use-page-title"
 import { BRAND } from "@/lib/brand"
+import { ClaimStatusCard } from "../components/ClaimStatusCard"
+import { EvidenceTimeline } from "../components/EvidenceTimeline"
+import { ContradictionDisplay } from "../components/ContradictionDisplay"
+import { useVerificationPoints, useTransitions, useContradictions } from "../hooks/use-evidence"
 
 export default function InterviewReportPage() {
   const { interviewId } = useParams<{ interviewId: string }>()
@@ -15,7 +20,11 @@ export default function InterviewReportPage() {
 
   const { data: reportData, isLoading } = useReport(interviewId)
   const { data: interview } = useInterview(interviewId)
+  const { data: contradictionsData } = useContradictions(interviewId)
   const report = reportData?.report
+
+  const [selectedVpId, setSelectedVpId] = useState<string | null>(null)
+  const { data: transitionsData } = useTransitions(selectedVpId || undefined)
 
   if (isLoading) {
     return <LoadingState message="问鉴正在准备本次面试分析报告。" />
@@ -150,13 +159,41 @@ export default function InterviewReportPage() {
 
       <section className="app-surface" style={{ padding: "1.35rem 1.45rem" }}>
         <SectionTitle index={6} title="简历证据一致性" />
+
+        {/* Phase 2: Evidence Engine 2.0 Visualization */}
+        {contradictionsData && contradictionsData.contradictions.length > 0 && (
+          <div style={{ marginTop: "1rem", marginBottom: "1.5rem" }}>
+            <ContradictionDisplay contradictions={contradictionsData.contradictions} />
+          </div>
+        )}
+
+        {/* Phase 2: Evidence Timeline Modal */}
+        {selectedVpId && transitionsData && (
+          <div style={styles.modal} onClick={() => setSelectedVpId(null)}>
+            <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+              <button style={styles.closeButton} onClick={() => setSelectedVpId(null)}>
+                ✕
+              </button>
+              <EvidenceTimeline
+                verificationPointId={transitionsData.verification_point_id}
+                aspect={transitionsData.verification_point_id}
+                currentState={transitionsData.current_state}
+                transitions={transitionsData.transitions}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Phase 1: Legacy Claim Status Display */}
         {claimEntries.length ? (
           <div style={{ display: "grid", gap: "0.75rem", marginTop: "1rem" }}>
             {claimEntries.map(([claimId, claimStatus]) => (
-              <div key={claimId} className="app-muted-surface" style={{ padding: "0.95rem 1rem", display: "flex", justifyContent: "space-between", gap: "1rem" }}>
-                <div style={{ color: "var(--wj-text-primary)", fontFamily: "\"JetBrains Mono\", Consolas, monospace" }}>{claimId}</div>
-                <ClaimStatusPill value={claimStatus} />
-              </div>
+              <ClaimStatusSection
+                key={claimId}
+                claimId={claimId}
+                claimStatus={claimStatus}
+                onViewTimeline={setSelectedVpId}
+              />
             ))}
           </div>
         ) : (
@@ -236,6 +273,43 @@ function OverallScoreCard({
         <MetaRow label="已回答问题" value={answeredQuestions != null ? String(answeredQuestions) : "--"} />
         <MetaRow label="已验证主张" value={claimsVerified != null ? String(claimsVerified) : "--"} />
       </div>
+    </div>
+  )
+}
+
+function ClaimStatusSection({
+  claimId,
+  claimStatus,
+  onViewTimeline,
+}: {
+  claimId: string
+  claimStatus: unknown
+  onViewTimeline: (vpId: string) => void
+}) {
+  const { data: vpData } = useVerificationPoints(claimId)
+
+  // If Evidence Engine 2.0 data is available, use ClaimStatusCard
+  if (vpData && vpData.verification_points.length > 0) {
+    return (
+      <ClaimStatusCard
+        claimId={claimId}
+        claimText={claimId}
+        verificationPoints={vpData.verification_points}
+        onViewTimeline={onViewTimeline}
+      />
+    )
+  }
+
+  // Fallback to Phase 1 display
+  return (
+    <div
+      className="app-muted-surface"
+      style={{ padding: "0.95rem 1rem", display: "flex", justifyContent: "space-between", gap: "1rem" }}
+    >
+      <div style={{ color: "var(--wj-text-primary)", fontFamily: '"JetBrains Mono", Consolas, monospace' }}>
+        {claimId}
+      </div>
+      <ClaimStatusPill value={claimStatus} />
     </div>
   )
 }
@@ -323,4 +397,46 @@ const dimensionLabels: Record<string, string> = {
 
 function dimensionLabel(name: string) {
   return dimensionLabels[name] ?? name
+}
+
+const styles: Record<string, React.CSSProperties> = {
+  modal: {
+    position: "fixed",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 1000,
+    padding: "2rem",
+  },
+  modalContent: {
+    position: "relative",
+    maxWidth: "900px",
+    width: "100%",
+    maxHeight: "85vh",
+    overflowY: "auto",
+    borderRadius: "0.75rem",
+  },
+  closeButton: {
+    position: "absolute",
+    top: "1rem",
+    right: "1rem",
+    width: "32px",
+    height: "32px",
+    borderRadius: "50%",
+    border: "none",
+    backgroundColor: "var(--wj-bg-subtle)",
+    color: "var(--wj-text-primary)",
+    fontSize: "1.2rem",
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 1,
+    transition: "all 0.15s",
+  },
 }

@@ -11,7 +11,7 @@ from app.api.errors import (
     validation_error_handler,
 )
 from app.api.middleware import RequestIDMiddleware
-from app.api.v1 import health, resumes, interviews, reports, dashboard, analytics, auth
+from app.api.v1 import health, resumes, interviews, reports, dashboard, analytics, auth, job_targets, claim_gap, evidence
 from app.core.config import settings
 from app.core.exceptions import AppError
 from app.observability.logging import logger
@@ -54,3 +54,6 @@ app.include_router(reports.router, prefix="/api/v1")
 app.include_router(dashboard.router, prefix="/api/v1")
 app.include_router(analytics.router, prefix="/api/v1")
 app.include_router(auth.router, prefix="/api/v1")
+app.include_router(job_targets.router, prefix="/api/v1")
+app.include_router(claim_gap.router, prefix="/api/v1")
+app.include_router(evidence.router, prefix="/api/v1")
