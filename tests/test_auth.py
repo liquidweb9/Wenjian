@@ -132,7 +132,7 @@ class TestRegistration:
         response = client.post(
             "/api/v1/register",
             json={
-                "email": "newuser@example.com",
+                "email": f"newuser_{pytest.timestamp}@example.com",
                 "password": "securepassword123",
                 "full_name": "New User"
             }
@@ -145,7 +145,7 @@ class TestRegistration:
 
     def test_register_duplicate_email(self):
         """Test registering with existing email."""
-        email = "duplicate@example.com"
+        email = f"duplicate_{pytest.timestamp}@example.com"
 
         # First registration
         response1 = client.post(
@@ -168,7 +168,7 @@ class TestRegistration:
             }
         )
         assert response2.status_code == 400
-        assert "already registered" in response2.json()["detail"].lower()
+        assert "already registered" in response2.json()["error"]["message"].lower()
 
     def test_register_invalid_email(self):
         """Test registering with invalid email."""
@@ -187,7 +187,7 @@ class TestRegistration:
         response = client.post(
             "/api/v1/register",
             json={
-                "email": "minimal@example.com",
+                "email": f"minimal_{pytest.timestamp}@example.com",
                 "password": "password123",
             }
         )
@@ -206,7 +206,7 @@ class TestLogin:
 
     def test_login_success(self):
         """Test successful login."""
-        email = "logintest@example.com"
+        email = f"logintest_{pytest.timestamp}@example.com"
         password = "testpassword"
 
         # Register user
@@ -228,7 +228,7 @@ class TestLogin:
 
     def test_login_wrong_password(self):
         """Test login with wrong password."""
-        email = "wrongpwd@example.com"
+        email = f"wrongpwd_{pytest.timestamp}@example.com"
         password = "correctpassword"
 
         # Register user
@@ -244,20 +244,20 @@ class TestLogin:
         )
 
         assert response.status_code == 401
-        assert "invalid" in response.json()["detail"].lower()
+        assert "invalid" in response.json()["error"]["message"].lower()
 
     def test_login_nonexistent_user(self):
         """Test login with non-existent email."""
         response = client.post(
             "/api/v1/login",
             json={
-                "email": "nonexistent@example.com",
+                "email": f"nonexistent_{pytest.timestamp}@example.com",
                 "password": "anypassword"
             }
         )
 
         assert response.status_code == 401
-        assert "invalid" in response.json()["detail"].lower()
+        assert "invalid" in response.json()["error"]["message"].lower()
 
 
 # ============================================================
@@ -269,7 +269,7 @@ class TestGetCurrentUser:
 
     def test_get_me_with_valid_token(self):
         """Test getting user profile with valid token."""
-        email = "getme@example.com"
+        email = f"getme_{pytest.timestamp}@example.com"
         password = "password123"
 
         # Register user
@@ -298,7 +298,7 @@ class TestGetCurrentUser:
         response = client.get("/api/v1/me")
 
         assert response.status_code == 401
-        assert "missing" in response.json()["detail"].lower()
+        assert "missing" in response.json()["error"]["message"].lower()
 
     def test_get_me_with_invalid_token(self):
         """Test getting profile with invalid token."""
@@ -308,7 +308,7 @@ class TestGetCurrentUser:
         )
 
         assert response.status_code == 401
-        assert "invalid" in response.json()["detail"].lower()
+        assert "invalid" in response.json()["error"]["message"].lower()
 
 
 # ============================================================
