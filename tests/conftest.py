@@ -4,10 +4,18 @@ import pytest
 import pytest_asyncio
 import tempfile
 import os
+import time
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.pool import NullPool
 
 from app.persistence.database import Base
+
+
+# Generate unique timestamp for test data
+@pytest.fixture(scope="session", autouse=True)
+def setup_test_timestamp():
+    """Set up a unique timestamp for this test session."""
+    pytest.timestamp = int(time.time() * 1000)
 # Import all models to ensure they're registered with Base.metadata
 from app.persistence.models import (
     User, ResumeSource, ResumeRevision, ResumeBlock, ResumeProfile, ResumeClaim,

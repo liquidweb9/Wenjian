@@ -104,17 +104,17 @@ class DataDeletionService:
         stats["job_targets"] = result.rowcount
 
         # Step 7: Handle LLMCall audit records
-        if preserve_audit:
-            # Anonymize: set user_id to NULL, keep call record
-            llm_calls = await self.session.execute(
-                select(LLMCall).where(LLMCall.interview_id.in_(interview_ids))
-            )
-            for call in llm_calls.scalars():
-                call.interview_id = None  # Anonymize
-                stats["llm_calls_anonymized"] += 1
-        else:
-            # Full deletion
-            if interview_ids:
+        if interview_ids:
+            if preserve_audit:
+                # Anonymize: set user_id to NULL, keep call record
+                llm_calls = await self.session.execute(
+                    select(LLMCall).where(LLMCall.interview_id.in_(interview_ids))
+                )
+                for call in llm_calls.scalars():
+                    call.interview_id = None  # Anonymize
+                    stats["llm_calls_anonymized"] += 1
+            else:
+                # Full deletion
                 result = await self.session.execute(
                     delete(LLMCall).where(LLMCall.interview_id.in_(interview_ids))
                 )
