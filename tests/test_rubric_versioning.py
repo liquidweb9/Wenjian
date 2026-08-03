@@ -4,6 +4,7 @@ M2.3: Tests rubric versioning, comparison, and weighted scoring.
 """
 
 import pytest
+from contextlib import asynccontextmanager
 from app.evals.rubric_versioning import (
     RubricRegistry,
     RubricSpec,
@@ -13,9 +14,18 @@ from app.evals.rubric_versioning import (
 
 
 @pytest.fixture
-async def registry():
-    """Create a fresh registry for each test."""
-    return RubricRegistry()
+async def registry(async_engine):
+    """Create a fresh registry for each test with test database session."""
+    # Create a session maker that uses the test engine
+    from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
+
+    session_factory = async_sessionmaker(
+        async_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+    )
+
+    return RubricRegistry(session_factory=session_factory)
 
 
 @pytest.mark.asyncio

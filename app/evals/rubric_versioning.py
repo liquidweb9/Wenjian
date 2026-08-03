@@ -81,8 +81,9 @@ class RubricSpec:
 class RubricRegistry:
     """Registry for managing versioned rubrics."""
 
-    def __init__(self):
+    def __init__(self, session_factory=None):
         self._cache: dict[tuple[str, int], RubricSpec] = {}
+        self._session_factory = session_factory or async_session_factory
 
     async def register_rubric(
         self,
@@ -108,7 +109,7 @@ class RubricRegistry:
         Returns:
             rubric_id: Unique ID for this rubric version
         """
-        async with async_session_factory() as session:
+        async with self._session_factory() as session:
             # Check if this version already exists
             stmt = select(RubricVersion).where(
                 RubricVersion.rubric_name == rubric_name,
@@ -168,7 +169,7 @@ class RubricRegistry:
         if version is not None and (rubric_name, version) in self._cache:
             return self._cache[(rubric_name, version)]
 
-        async with async_session_factory() as session:
+        async with self._session_factory() as session:
             if version is not None:
                 # Get specific version
                 stmt = select(RubricVersion).where(
@@ -220,7 +221,7 @@ class RubricRegistry:
         Returns:
             List of version numbers, sorted descending
         """
-        async with async_session_factory() as session:
+        async with self._session_factory() as session:
             stmt = (
                 select(RubricVersion.version)
                 .where(RubricVersion.rubric_name == rubric_name)

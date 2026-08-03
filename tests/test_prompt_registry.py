@@ -4,6 +4,7 @@ M2.3: Tests prompt versioning, loading, and registration.
 """
 
 import pytest
+from contextlib import asynccontextmanager
 from app.evals.prompt_registry import (
     PromptRegistry,
     PromptSpec,
@@ -12,9 +13,18 @@ from app.evals.prompt_registry import (
 
 
 @pytest.fixture
-async def registry():
-    """Create a fresh registry for each test."""
-    return PromptRegistry()
+async def registry(async_engine):
+    """Create a fresh registry for each test with test database session."""
+    # Create a session maker that uses the test engine
+    from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
+
+    session_factory = async_sessionmaker(
+        async_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+    )
+
+    return PromptRegistry(session_factory=session_factory)
 
 
 @pytest.mark.asyncio

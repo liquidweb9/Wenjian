@@ -30,8 +30,9 @@ class PromptSpec:
 class PromptRegistry:
     """Registry for managing versioned prompts."""
 
-    def __init__(self):
+    def __init__(self, session_factory=None):
         self._cache: dict[tuple[str, int], PromptSpec] = {}
+        self._session_factory = session_factory or async_session_factory
 
     async def register_prompt(
         self,
@@ -59,7 +60,7 @@ class PromptRegistry:
         Returns:
             prompt_id: Unique ID for this prompt version
         """
-        async with async_session_factory() as session:
+        async with self._session_factory() as session:
             # Check if this version already exists
             stmt = select(PromptVersion).where(
                 PromptVersion.task_name == task_name,
@@ -121,7 +122,7 @@ class PromptRegistry:
         if version is not None and (task_name, version) in self._cache:
             return self._cache[(task_name, version)]
 
-        async with async_session_factory() as session:
+        async with self._session_factory() as session:
             if version is not None:
                 # Get specific version
                 stmt = select(PromptVersion).where(
@@ -174,7 +175,7 @@ class PromptRegistry:
         Returns:
             List of version numbers, sorted descending
         """
-        async with async_session_factory() as session:
+        async with self._session_factory() as session:
             stmt = (
                 select(PromptVersion.version)
                 .where(PromptVersion.task_name == task_name)
@@ -191,7 +192,7 @@ class PromptRegistry:
             task_name: Task identifier
             version: Version to deactivate
         """
-        async with async_session_factory() as session:
+        async with self._session_factory() as session:
             stmt = select(PromptVersion).where(
                 PromptVersion.task_name == task_name,
                 PromptVersion.version == version
