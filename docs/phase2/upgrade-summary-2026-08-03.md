@@ -125,23 +125,28 @@ description → dimension_descriptors, scoring_guidelines
 
 ## 📊 测试状态
 
-### 当前测试通过率: **85.8% (488/569)**
+### 当前测试通过率: **90.2% (513/569)** ⬆️ 
 
-**通过的测试** (488):
+**修复记录**:
+- 初始状态: 85.8% (488/569)
+- 修复异步测试: 90.2% (513/569) - **提升 4.4%** 🎉
+
+**通过的测试** (513):
 - ✅ 所有 Phase 1 核心测试 (解析器、claim 提取、访谈逻辑)
-- ✅ 所有 Phase 2 核心功能测试 (claim_gap, evidence, ability_aggregator - 46个测试)
+- ✅ 所有 Phase 2 核心功能测试 (claim_gap, evidence, ability_aggregator)
+- ✅ Prompt/Rubric 版本控制测试 (20/20) ✅ **新修复**
 - ✅ 密码哈希和 JWT 认证 (11/21)
 - ✅ 日志脱敏 (全部通过)
 - ✅ 训练计划生成 (全部通过)
-- ✅ 健康检查端点 (1/2)
+- ✅ 健康检查端点
 
-**失败/错误的测试** (66失败 + 18错误 = 84):
-1. **Auth 集成测试** (10 失败 + 5 错误) - 使用真实 PostgreSQL，需要数据完整性修复
+**失败/错误的测试** (56):
+1. **Auth 集成测试** (10 失败 + 5 错误) - 数据库完整性问题
 2. **Data Deletion 测试** (7 错误) - 需要完整数据库 schema
-3. **E2E 测试** (11 错误) - TestClient event loop 问题
-4. **Prompt/Rubric 测试** (8 失败) - Event loop closed 问题，非 schema 问题
+3. **E2E 测试** (6 错误) - TestClient event loop 问题
+4. **其他集成测试** (28 失败) - 数据库连接或数据问题
 
-**失败原因**: 主要是异步测试 event loop 管理问题和集成测试数据库连接问题，**不是 schema 不匹配**
+**主要问题**: 集成测试数据库连接和 E2E TestClient 异步兼容性
 
 ---
 
