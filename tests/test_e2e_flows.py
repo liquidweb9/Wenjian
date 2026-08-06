@@ -20,7 +20,7 @@ class TestUserAuthenticationFlow:
         register_response = client.post(
             "/api/v1/register",
             json={
-                "email": "e2e_user@example.com",
+                "email": f"e2e_user_{pytest.timestamp}@example.com",
                 "password": "securepass123",
                 "full_name": "E2E Test User"
             }
@@ -37,7 +37,7 @@ class TestUserAuthenticationFlow:
         )
         assert profile_response.status_code == 200
         profile = profile_response.json()
-        assert profile["email"] == "e2e_user@example.com"
+        assert profile["email"] == f"e2e_user_{pytest.timestamp}@example.com"
         assert profile["full_name"] == "E2E Test User"
 
         # Step 3: Login again
@@ -67,7 +67,7 @@ class TestResumeUploadFlow:
         response = client.post(
             "/api/v1/register",
             json={
-                "email": "resume_user@example.com",
+                "email": f"resume_user_{pytest.timestamp}@example.com",
                 "password": "password123",
                 "full_name": "Resume User"
             }
@@ -97,11 +97,11 @@ Python, FastAPI, PostgreSQL, Docker, AWS
 
         # Step 1: Upload resume
         upload_response = client.post(
-            "/api/v1/resumes/upload",
+            "/api/v1/resumes",
             files={"file": ("resume.txt", resume_content, "text/plain")},
             headers=self.headers
         )
-        assert upload_response.status_code == 201
+        assert upload_response.status_code == 200
         upload_data = upload_response.json()
         assert "resume_id" in upload_data
         resume_id = upload_data["resume_id"]
@@ -113,7 +113,7 @@ Python, FastAPI, PostgreSQL, Docker, AWS
         )
         assert status_response.status_code == 200
         resume_data = status_response.json()
-        assert resume_data["status"] in ["UPLOADED", "PARSING", "COMPLETE"]
+        assert resume_data["status"] in ["UPLOADED", "PARSED_UNCONFIRMED", "CONFIRMED"]
 
         # Step 3: Get resume profile (may need to wait for parsing)
         profile_response = client.get(
@@ -130,8 +130,8 @@ Python, FastAPI, PostgreSQL, Docker, AWS
             headers=self.headers
         )
         assert list_response.status_code == 200
-        resumes = list_response.json()
-        assert isinstance(resumes, list)
+        data = list_response.json()
+        assert isinstance(data.get("items"), list)
 
 
 class TestJobTargetCreationFlow:
@@ -142,7 +142,7 @@ class TestJobTargetCreationFlow:
         response = client.post(
             "/api/v1/register",
             json={
-                "email": "job_user@example.com",
+                "email": f"job_user_{pytest.timestamp}@example.com",
                 "password": "password123",
             }
         )
@@ -162,6 +162,15 @@ class TestJobTargetCreationFlow:
                 "level": "senior",
                 "interview_round": "technical",
                 "source": "template",
+                "requirements": [
+                    {
+                        "competency_code": "backend.api_design",
+                        "title": "REST API 设计",
+                        "importance": 0.8,
+                        "expected_level": 4,
+                        "evidence_expectation": ["技术细节", "项目实例"],
+                    }
+                ],
             },
             headers=self.headers
         )
@@ -183,13 +192,22 @@ Requirements:
 """
 
         create_response = client.post(
-            "/api/v1/job-targets/from-jd",
+            "/api/v1/job-targets",
             json={
                 "title": "Senior Backend Engineer",
-                "company_name": "TechCorp",
                 "level": "senior",
                 "interview_round": "technical",
+                "source": "pasted_jd",
                 "raw_jd": jd_text,
+                "requirements": [
+                    {
+                        "competency_code": "backend.microservices",
+                        "title": "微服务架构",
+                        "importance": 0.9,
+                        "expected_level": 4,
+                        "evidence_expectation": ["架构设计", "落地案例"],
+                    }
+                ],
             },
             headers=self.headers
         )
@@ -206,7 +224,7 @@ class TestInterviewCreationFlow:
         response = client.post(
             "/api/v1/register",
             json={
-                "email": "interview_user@example.com",
+                "email": f"interview_user_{pytest.timestamp}@example.com",
                 "password": "password123",
             }
         )
@@ -240,8 +258,8 @@ class TestInterviewCreationFlow:
             headers=self.headers
         )
         assert list_response.status_code == 200
-        interviews = list_response.json()
-        assert isinstance(interviews, list)
+        data = list_response.json()
+        assert isinstance(data.get("items"), list)
 
 
 class TestHealthAndStatus:
@@ -265,7 +283,7 @@ class TestHealthAndStatus:
         auth_response = client.post(
             "/api/v1/register",
             json={
-                "email": "dashboard_user@example.com",
+                "email": f"dashboard_user_{pytest.timestamp}@example.com",
                 "password": "password123",
             }
         )
@@ -293,7 +311,7 @@ class TestDataDeletionFlow:
         register_response = client.post(
             "/api/v1/register",
             json={
-                "email": "delete_me@example.com",
+                "email": f"delete_me_{pytest.timestamp}@example.com",
                 "password": "password123",
             }
         )

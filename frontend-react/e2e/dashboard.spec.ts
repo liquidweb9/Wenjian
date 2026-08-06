@@ -1,49 +1,46 @@
 import { test, expect } from '@playwright/test';
+import { setupAuthenticatedPage } from './utils/auth';
 
 /**
  * Dashboard E2E Tests
- * Tests the landing page and navigation
+ * Tests the authenticated workspace landing page and navigation
  */
 test.describe('Dashboard', () => {
-  test('should load dashboard page', async ({ page }) => {
-    await page.goto('/');
+  test('should load dashboard page', async ({ page, request }) => {
+    await setupAuthenticatedPage(page, request);
+    await page.goto('/app/dashboard');
 
-    // Check page title
-    await expect(page).toHaveTitle(/Wenjian/);
+    // Check page title (Chinese brand or latin name)
+    await expect(page).toHaveTitle(/问鉴|Wenjian/i);
 
-    // Check main heading exists
-    const heading = page.locator('h1, h2').first();
+    // Check a heading renders inside the app layout
+    const heading = page.locator('main h1, main h2').first();
     await expect(heading).toBeVisible();
   });
 
-  test('should display navigation menu', async ({ page }) => {
-    await page.goto('/');
+  test('should display navigation menu', async ({ page, request }) => {
+    await setupAuthenticatedPage(page, request);
+    await page.goto('/app/dashboard');
 
-    // Check for navigation links
     const nav = page.locator('nav').first();
     await expect(nav).toBeVisible();
 
-    // Should have links to key sections
-    await expect(page.getByRole('link', { name: /resumes?/i })).toBeVisible();
-    await expect(page.getByRole('link', { name: /interviews?/i })).toBeVisible();
+    await expect(page.getByRole('link', { name: /简历管理/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: /模拟面试/ })).toBeVisible();
   });
 
-  test('should navigate to resume upload', async ({ page }) => {
-    await page.goto('/');
+  test('should navigate to resume upload', async ({ page, request }) => {
+    await setupAuthenticatedPage(page, request);
+    await page.goto('/app/dashboard');
 
-    // Click resume link or upload button
-    const resumeLink = page.getByRole('link', { name: /resumes?/i }).first();
+    const resumeLink = page.getByRole('link', { name: /简历管理/ }).first();
     await resumeLink.click();
 
-    // Should navigate to resume page
-    await expect(page).toHaveURL(/\/resumes/);
+    await expect(page).toHaveURL(/\/app\/resumes/);
   });
 
-  test('should display health status', async ({ page }) => {
-    await page.goto('/');
-
-    // Check if health endpoint is accessible
-    const response = await page.request.get('http://localhost:8000/api/v1/health');
+  test('should display health status', async ({ request }) => {
+    const response = await request.get('http://localhost:8000/api/v1/health');
     expect(response.ok()).toBeTruthy();
 
     const data = await response.json();

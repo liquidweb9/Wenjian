@@ -3,22 +3,30 @@
 M2.6 Task #13: Tests for user registration, login, JWT tokens, and permissions.
 """
 
+from datetime import timedelta
+
 import pytest
-from datetime import datetime, timedelta
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.main import app
-from app.core.security import hash_password, verify_password, create_access_token, decode_access_token
 from app.core.ids import new_id
-from app.persistence.models import User, ResumeSource, Interview
+from app.core.security import (
+    create_access_token,
+    decode_access_token,
+    hash_password,
+    verify_password,
+)
+from app.main import app
+from app.persistence.models import Interview, ResumeSource, User
 from app.persistence.repositories import (
-    UserRepository,
-    AuthResumeRepository as ResumeRepository,
     AuthInterviewRepository as InterviewRepository,
 )
-from app.core.exceptions import PermissionDeniedError
-
+from app.persistence.repositories import (
+    AuthResumeRepository as ResumeRepository,
+)
+from app.persistence.repositories import (
+    UserRepository,
+)
 
 client = TestClient(app)
 
@@ -517,12 +525,12 @@ class TestHorizontalPrivilegeEscalation:
         # User 1 registers and uploads resume
         user1_response = client.post(
             "/api/v1/register",
-            json={"email": "user1@test.com", "password": "pwd1"}
+            json={"email": f"priv_user1_{pytest.timestamp}@example.com", "password": "pwd1"}
         )
         user1_token = user1_response.json()["access_token"]
 
         upload_response = client.post(
-            "/api/v1/resumes/upload",
+            "/api/v1/resumes",
             headers={"Authorization": f"Bearer {user1_token}"},
             files={"file": ("resume.txt", b"Test resume content", "text/plain")}
         )
@@ -531,7 +539,7 @@ class TestHorizontalPrivilegeEscalation:
         # User 2 registers
         user2_response = client.post(
             "/api/v1/register",
-            json={"email": "user2@test.com", "password": "pwd2"}
+            json={"email": f"priv_user2_{pytest.timestamp}@example.com", "password": "pwd2"}
         )
         user2_token = user2_response.json()["access_token"]
 

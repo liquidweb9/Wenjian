@@ -7,17 +7,16 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.data_deletion import DataDeletionService
-from app.core.security import hash_password
 from app.core.ids import new_id
+from app.core.security import hash_password
 from app.persistence.models import (
-    User,
-    ResumeSource,
-    ResumeRevision,
     Interview,
     InterviewQuestion,
     JobTarget,
-    AbilityProfile,
     LLMCall,
+    ResumeRevision,
+    ResumeSource,
+    User,
 )
 
 
@@ -53,15 +52,17 @@ class TestDataDeletion:
         revision = ResumeRevision(
             revision_id=new_id("rev"),
             resume_id=resume_id,
-            status="COMPLETE",
+            status="CONFIRMED",
         )
         async_session.add(revision)
 
         # Create interview
         interview = Interview(
             interview_id=interview_id,
+            thread_id=interview_id,
             user_id=user_id,
             resume_id=resume_id,
+            target_role="Backend Engineer",
             status="COMPLETE",
         )
         async_session.add(interview)
@@ -70,7 +71,7 @@ class TestDataDeletion:
         question = InterviewQuestion(
             question_id=new_id("q"),
             interview_id=interview_id,
-            question_text="Tell me about your project",
+            data={"question_text": "Tell me about your project"},
         )
         async_session.add(question)
 
@@ -116,8 +117,10 @@ class TestDataDeletion:
 
         interview = Interview(
             interview_id=interview_id,
+            thread_id=interview_id,
             user_id=user_id,
             resume_id=new_id("resume"),
+            target_role="Backend Engineer",
             status="COMPLETE",
         )
         async_session.add(interview)
@@ -167,7 +170,7 @@ class TestDataDeletion:
         revision = ResumeRevision(
             revision_id=new_id("rev"),
             resume_id=resume_id,
-            status="COMPLETE",
+            status="CONFIRMED",
         )
         async_session.add(revision)
 
@@ -232,8 +235,10 @@ class TestDataDeletion:
 
         interview = Interview(
             interview_id=interview_id,
+            thread_id=interview_id,
             user_id=user_id,
             resume_id=new_id("resume"),
+            target_role="Backend Engineer",
             status="IN_PROGRESS",
         )
         async_session.add(interview)
@@ -241,7 +246,7 @@ class TestDataDeletion:
         question = InterviewQuestion(
             question_id=new_id("q"),
             interview_id=interview_id,
-            question_text="What is your experience?",
+            data={"question_text": "What is your experience?"},
         )
         async_session.add(question)
 

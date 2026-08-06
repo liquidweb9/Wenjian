@@ -1,30 +1,33 @@
 import { test, expect } from '@playwright/test';
 import path from 'path';
+import { setupAuthenticatedPage } from './utils/auth';
 
 /**
  * Resume Upload E2E Tests
- * Tests the complete resume upload and parsing flow
+ * Tests the resume list and upload flow (authenticated)
  */
 test.describe('Resume Upload', () => {
-  test('should navigate to resume upload page', async ({ page }) => {
-    await page.goto('/resumes');
+  test('should navigate to resume upload page', async ({ page, request }) => {
+    await setupAuthenticatedPage(page, request);
+    await page.goto('/app/resumes');
 
-    // Check for upload area or button
-    const uploadArea = page.locator('input[type="file"]').or(page.getByText(/upload/i));
-    await expect(uploadArea.first()).toBeVisible();
+    // Upload entry lives on the list page via the "上传简历" button.
+    const uploadButton = page.getByRole('link', { name: /上传简历|导入/ }).first();
+    const fileInput = page.locator('input[type="file"]');
+    await expect(uploadButton.or(fileInput).first()).toBeVisible();
   });
 
-  test('should display resume list', async ({ page }) => {
-    await page.goto('/resumes');
+  test('should display resume list', async ({ page, request }) => {
+    await setupAuthenticatedPage(page, request);
+    await page.goto('/app/resumes');
 
-    // Should show resume list or empty state
-    const content = page.locator('main, [role="main"]');
+    const content = page.locator('main');
     await expect(content).toBeVisible();
   });
 
   // Note: File upload test requires a sample resume file
   test.skip('should upload a resume file', async ({ page }) => {
-    await page.goto('/resumes');
+    await page.goto('/app/resumes');
 
     // Locate file input
     const fileInput = page.locator('input[type="file"]');
@@ -45,21 +48,17 @@ test.describe('Resume Upload', () => {
     await expect(page.getByText(/success|uploaded|processing/i)).toBeVisible({ timeout: 10000 });
   });
 
-  test('should handle navigation to resume detail', async ({ page }) => {
-    await page.goto('/resumes');
+  test('should handle navigation to resume detail', async ({ page, request }) => {
+    await setupAuthenticatedPage(page, request);
+    await page.goto('/app/resumes');
 
-    // If there are any resumes, test clicking on one
-    const resumeCard = page.locator('[data-testid="resume-card"]').or(
-      page.locator('a[href*="/resumes/"]')
-    ).first();
-
-    const hasResumes = await resumeCard.isVisible().catch(() => false);
+    const resumeLink = page.locator('a[href*="/app/resumes/"]').first();
+    const hasResumes = await resumeLink.isVisible().catch(() => false);
 
     if (hasResumes) {
-      await resumeCard.click();
+      await resumeLink.click();
 
-      // Should navigate to detail page
-      await expect(page).toHaveURL(/\/resumes\/[^/]+/);
+      await expect(page).toHaveURL(/\/app\/resumes\/[^/]+/);
     }
   });
 });

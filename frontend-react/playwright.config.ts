@@ -16,8 +16,8 @@ export default defineConfig({
   /* Retry on CI only */
   retries: process.env.CI ? 2 : 0,
 
-  /* Opt out of parallel tests on CI */
-  workers: process.env.CI ? 1 : undefined,
+  /* Limit local parallelism to keep the dev server + headless chromium stable */
+  workers: process.env.CI ? 1 : 2,
 
   /* Reporter to use */
   reporter: 'html',
@@ -26,6 +26,11 @@ export default defineConfig({
   use: {
     /* Base URL to use in actions like `await page.goto('/')` */
     baseURL: 'http://localhost:5174',
+
+    /* Headless chromium can crash on Windows without GPU disabled. */
+    launchOptions: {
+      args: ['--no-sandbox', '--disable-gpu'],
+    },
 
     /* Collect trace when retrying the failed test */
     trace: 'on-first-retry',

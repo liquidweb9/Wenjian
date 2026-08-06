@@ -1,9 +1,15 @@
 """Pytest configuration and shared fixtures."""
 
+import os
+
+# Disable asyncpg connection pooling for the app engine under pytest so
+# connections never leak across the TestClient portal loop and pytest-asyncio
+# loops (see app/persistence/database.py). Must be set before app modules load.
+os.environ.setdefault("WJ_TEST_NULL_POOL", "1")
+
 import pytest
 import pytest_asyncio
 import tempfile
-import os
 import time
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.pool import NullPool

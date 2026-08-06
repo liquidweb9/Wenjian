@@ -5,26 +5,21 @@ import { test, expect } from '@playwright/test';
  * Tests user registration, login, and profile access
  */
 test.describe('Authentication', () => {
-  const testEmail = `e2e_test_${Date.now()}@example.com`;
   const testPassword = 'SecurePass123!';
   const testName = 'E2E Test User';
 
   test('should show login page', async ({ page }) => {
     await page.goto('/login');
 
-    // Should have login form or redirect to it
-    const loginText = page.getByText(/login|sign in/i);
-    await expect(loginText.first()).toBeVisible();
+    // The login page is localized in Chinese.
+    await expect(page.getByRole('heading', { name: /登录问鉴/ })).toBeVisible();
+    await expect(page.getByPlaceholder('your@email.com')).toBeVisible();
   });
 
   test('should register new user via API', async ({ request }) => {
-    // Test registration endpoint directly
+    const email = `e2e_${Date.now()}@example.com`;
     const response = await request.post('http://localhost:8000/api/v1/register', {
-      data: {
-        email: testEmail,
-        password: testPassword,
-        full_name: testName
-      }
+      data: { email, password: testPassword, full_name: testName },
     });
 
     expect(response.ok()).toBeTruthy();
@@ -33,46 +28,35 @@ test.describe('Authentication', () => {
   });
 
   test('should login existing user via API', async ({ request }) => {
+    const email = `login_test_${Date.now()}@example.com`;
+
     // First register
-    await request.post('http://localhost:8000/api/v1/register', {
-      data: {
-        email: `login_test_${Date.now()}@example.com`,
-        password: testPassword,
-        full_name: testName
-      }
+    const registerResponse = await request.post('http://localhost:8000/api/v1/register', {
+      data: { email, password: testPassword, full_name: testName },
+    });
+    expect(registerResponse.ok()).toBeTruthy();
+
+    // Then login with the same credentials
+    const loginResponse = await request.post('http://localhost:8000/api/v1/login', {
+      data: { email, password: testPassword },
     });
 
-    // Then login
-    const response = await request.post('http://localhost:8000/api/v1/login', {
-      data: {
-        email: `login_test_${Date.now() - 1000}@example.com`,
-        password: testPassword
-      }
-    });
-
-    // Login may fail if user doesn't exist, which is expected
-    // This tests that the endpoint is accessible
-    expect([200, 401, 404]).toContain(response.status());
+    expect(loginResponse.ok()).toBeTruthy();
+    const data = await loginResponse.json();
+    expect(data).toHaveProperty('access_token');
   });
 
   test('should access profile with valid token', async ({ request }) => {
-    // Register and get token
+    const email = `profile_test_${Date.now()}@example.com`;
     const registerResponse = await request.post('http://localhost:8000/api/v1/register', {
-      data: {
-        email: `profile_test_${Date.now()}@example.com`,
-        password: testPassword,
-        full_name: testName
-      }
+      data: { email, password: testPassword, full_name: testName },
     });
 
     expect(registerResponse.ok()).toBeTruthy();
     const { access_token } = await registerResponse.json();
 
-    // Access profile
     const profileResponse = await request.get('http://localhost:8000/api/v1/me', {
-      headers: {
-        Authorization: `Bearer ${access_token}`
-      }
+      headers: { Authorization: `Bearer ${access_token}` },
     });
 
     expect(profileResponse.ok()).toBeTruthy();
@@ -83,9 +67,7 @@ test.describe('Authentication', () => {
 
   test('should reject invalid token', async ({ request }) => {
     const response = await request.get('http://localhost:8000/api/v1/me', {
-      headers: {
-        Authorization: 'Bearer invalid_token_12345'
-      }
+      headers: { Authorization: 'Bearer invalid_token_12345' },
     });
 
     expect(response.status()).toBe(401);

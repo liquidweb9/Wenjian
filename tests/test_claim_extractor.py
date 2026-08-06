@@ -21,6 +21,36 @@ def claim(entry_id: str, index: int) -> ResumeClaim:
     )
 
 
+def test_format_entries_includes_entry_ids():
+    profile = ResumeProfile(
+        resume_id="res-test",
+        revision_id="rev-test",
+        experiences=[entry("exp_abc123", "experience")],
+        projects=[entry("proj_456789", "project")],
+        research=[entry("res_abcdef01", "research")],
+    )
+    text = ClaimExtractor()._format_entries(profile)
+    assert "id=exp_abc123" in text
+    assert "id=proj_456789" in text
+    assert "id=res_abcdef01" in text
+
+
+def test_claims_with_known_entry_ids_survive_limiting():
+    profile = ResumeProfile(
+        resume_id="res-test",
+        revision_id="rev-test",
+        experiences=[entry("exp_abc123", "experience")],
+        projects=[entry("proj_456789", "project")],
+    )
+    claims = [
+        claim("exp_abc123", 1),
+        claim("proj_456789", 2),
+        claim("hallucinated_id", 3),  # id never shown to the model -> dropped
+    ]
+    limited = ClaimExtractor()._limit_claims(claims, profile)
+    assert {c.entry_id for c in limited} == {"exp_abc123", "proj_456789"}
+
+
 def test_claim_budget_excludes_education_and_limits_each_entry():
     profile = ResumeProfile(
         resume_id="res-test",

@@ -1,20 +1,100 @@
 """Tests for Evidence API endpoints."""
 
-import pytest
+import asyncio
+from datetime import datetime
 from unittest.mock import AsyncMock, patch
+
 from fastapi.testclient import TestClient
 
+from app.core.ids import new_id
 from app.main import app
+from app.persistence.database import async_session_factory
 from app.persistence.models import (
-    VerificationPoint,
+    Contradiction,
     Evidence,
     EvidenceTransition,
-    Contradiction,
+    Interview,
+    ResumeClaim,
+    ResumeSource,
+    VerificationPoint,
 )
-from datetime import datetime
-
 
 client = TestClient(app)
+
+
+def _register_user():
+    """Register a user via the API and return (token, user_id)."""
+    response = client.post(
+        "/api/v1/register",
+        json={"email": f"evid_{new_id('u')}@example.com", "password": "pass1234"},
+    )
+    assert response.status_code == 201, response.text
+    token = response.json()["access_token"]
+    me = client.get("/api/v1/me", headers={"Authorization": f"Bearer {token}"})
+    assert me.status_code == 200
+    return token, me.json()["user_id"]
+
+
+def _seed_resume_claim(user_id, claim_id, vp_id=None):
+    """Insert a resume + claim (+ optional verification point) owned by the user."""
+    async def _do():
+        async with async_session_factory() as session:
+            resume_id = new_id("resume")
+            session.add(ResumeSource(
+                resume_id=resume_id,
+                user_id=user_id,
+                source_id="src1",
+                file_name="resume.txt",
+                source_type="text",
+            ))
+            # No ORM relationship links these tables, so flush each parent before
+            # inserting its child to keep PostgreSQL FK order explicit.
+            await session.flush()
+            session.add(ResumeClaim(
+                claim_id=claim_id,
+                resume_id=resume_id,
+                data={},
+                priority=0,
+                confidence=0.5,
+                disabled=False,
+            ))
+            await session.flush()
+            if vp_id:
+                session.add(VerificationPoint(
+                    verification_point_id=vp_id,
+                    claim_id=claim_id,
+                    competency_code="backend.cache",
+                    aspect="Redis implementation",
+                    expected_evidence={"technical_details": True},
+                    current_state="UNSEEN",
+                ))
+            await session.commit()
+    asyncio.run(_do())
+
+
+def _seed_interview(user_id, interview_id):
+    """Insert an interview (with an owning resume) owned by the user."""
+    async def _do():
+        async with async_session_factory() as session:
+            resume_id = new_id("resume")
+            session.add(ResumeSource(
+                resume_id=resume_id,
+                user_id=user_id,
+                source_id="src1",
+                file_name="resume.txt",
+                source_type="text",
+            ))
+            await session.flush()
+            session.add(Interview(
+                interview_id=interview_id,
+                thread_id=interview_id,
+                user_id=user_id,
+                resume_id=resume_id,
+                target_role="Backend Engineer",
+                status="IN_PROGRESS",
+            ))
+            await session.commit()
+    asyncio.run(_do())
 
 
 class TestVerificationPointsEndpoint:
@@ -22,10 +102,15 @@ class TestVerificationPointsEndpoint:
 
     def test_get_verification_points_for_claim(self):
         """Test getting verification points for a claim."""
+        token, user_id = _register_user()
+        claim_id = new_id("claim")
+        _seed_resume_claim(user_id, claim_id)
+        headers = {"Authorization": f"Bearer {token}"}
+
         # Mock verification point
         mock_vp = VerificationPoint(
             verification_point_id="vp_001",
-            claim_id="claim_001",
+            claim_id=claim_id,
             competency_code="backend.cache",
             requirement_id=None,
             aspect="Redis implementation",
@@ -45,7 +130,9 @@ class TestVerificationPointsEndpoint:
             mock_repo.get_transitions_for_verification_point = AsyncMock(return_value=[1, 2])  # 2 transitions
             mock_repo.get_contradictions_for_verification_point = AsyncMock(return_value=[1])  # 1 contradiction
 
-            response = client.get("/api/v1/evidence/verification-points/claim_001")
+            response = client.get(
+                f"/api/v1/evidence/verification-points/{claim_id}", headers=headers
+            )
 
             assert response.status_code == 200
             data = response.json()
@@ -55,7 +142,7 @@ class TestVerificationPointsEndpoint:
 
             vp = data["verification_points"][0]
             assert vp["verification_point_id"] == "vp_001"
-            assert vp["claim_id"] == "claim_001"
+            assert vp["claim_id"] == claim_id
             assert vp["aspect"] == "Redis implementation"
             assert vp["current_state"] == "PARTIALLY_SUPPORTED"
             assert vp["strength"] == 0.75
@@ -65,16 +152,37 @@ class TestVerificationPointsEndpoint:
             assert vp["has_contradictions"] is True
 
     def test_get_verification_points_empty(self):
-        """Test getting verification points for nonexistent claim."""
+        """Test getting verification points for a claim with no VPs."""
+        token, user_id = _register_user()
+        claim_id = new_id("claim")
+        _seed_resume_claim(user_id, claim_id)
+        headers = {"Authorization": f"Bearer {token}"}
+
         with patch("app.api.v1.evidence.EvidenceRepository") as mock_repo_class:
             mock_repo = mock_repo_class.return_value
             mock_repo.get_verification_points_for_claim = AsyncMock(return_value=[])
 
-            response = client.get("/api/v1/evidence/verification-points/nonexistent")
+            response = client.get(
+                f"/api/v1/evidence/verification-points/{claim_id}", headers=headers
+            )
 
             assert response.status_code == 200
             data = response.json()
             assert data["verification_points"] == []
+
+    def test_get_verification_points_unauthorized(self):
+        """Test that a claim not owned by the user returns 404."""
+        token, _user_id = _register_user()
+        _other_token, other_user_id = _register_user()
+        claim_id = new_id("claim")
+        _seed_resume_claim(other_user_id, claim_id)  # owned by someone else
+        headers = {"Authorization": f"Bearer {token}"}
+
+        with patch("app.api.v1.evidence.EvidenceRepository"):
+            response = client.get(
+                f"/api/v1/evidence/verification-points/{claim_id}", headers=headers
+            )
+            assert response.status_code == 404
 
 
 class TestTransitionsEndpoint:
@@ -82,10 +190,16 @@ class TestTransitionsEndpoint:
 
     def test_get_transitions_for_verification_point(self):
         """Test getting transitions for a verification point."""
+        token, user_id = _register_user()
+        vp_id = new_id("vp")
+        claim_id = new_id("claim")
+        _seed_resume_claim(user_id, claim_id, vp_id=vp_id)
+        headers = {"Authorization": f"Bearer {token}"}
+
         # Mock VP
         mock_vp = VerificationPoint(
-            verification_point_id="vp_001",
-            claim_id="claim_001",
+            verification_point_id=vp_id,
+            claim_id=claim_id,
             competency_code="backend.cache",
             requirement_id=None,
             aspect="Redis implementation",
@@ -99,7 +213,7 @@ class TestTransitionsEndpoint:
         # Mock transitions
         mock_tr1 = EvidenceTransition(
             transition_id="tr_001",
-            verification_point_id="vp_001",
+            verification_point_id=vp_id,
             interview_id="int_001",
             from_state="UNSEEN",
             to_state="ADDRESSED",
@@ -115,7 +229,7 @@ class TestTransitionsEndpoint:
 
         mock_tr2 = EvidenceTransition(
             transition_id="tr_002",
-            verification_point_id="vp_001",
+            verification_point_id=vp_id,
             interview_id="int_001",
             from_state="ADDRESSED",
             to_state="PARTIALLY_SUPPORTED",
@@ -136,12 +250,14 @@ class TestTransitionsEndpoint:
                 return_value=[mock_tr1, mock_tr2]
             )
 
-            response = client.get("/api/v1/evidence/transitions/vp_001")
+            response = client.get(
+                f"/api/v1/evidence/transitions/{vp_id}", headers=headers
+            )
 
             assert response.status_code == 200
             data = response.json()
 
-            assert data["verification_point_id"] == "vp_001"
+            assert data["verification_point_id"] == vp_id
             assert data["current_state"] == "PARTIALLY_SUPPORTED"
             assert len(data["transitions"]) == 2
 
@@ -153,11 +269,19 @@ class TestTransitionsEndpoint:
 
     def test_get_transitions_not_found(self):
         """Test getting transitions for nonexistent VP."""
+        token, user_id = _register_user()
+        vp_id = new_id("vp")
+        claim_id = new_id("claim")
+        _seed_resume_claim(user_id, claim_id, vp_id=vp_id)
+        headers = {"Authorization": f"Bearer {token}"}
+
         with patch("app.api.v1.evidence.EvidenceRepository") as mock_repo_class:
             mock_repo = mock_repo_class.return_value
             mock_repo.get_verification_point = AsyncMock(return_value=None)
 
-            response = client.get("/api/v1/evidence/transitions/nonexistent")
+            response = client.get(
+                f"/api/v1/evidence/transitions/{vp_id}", headers=headers
+            )
 
             assert response.status_code == 404
 
@@ -167,10 +291,15 @@ class TestContradictionsEndpoint:
 
     def test_get_contradictions_for_interview(self):
         """Test getting contradictions for an interview."""
+        token, user_id = _register_user()
+        interview_id = new_id("interview")
+        _seed_interview(user_id, interview_id)
+        headers = {"Authorization": f"Bearer {token}"}
+
         mock_ct = Contradiction(
             contradiction_id="ct_001",
             verification_point_id="vp_001",
-            interview_id="int_001",
+            interview_id=interview_id,
             claim_id="claim_001",
             conflicting_answers=[
                 {"answer_id": "ans_001", "text": "Redis"},
@@ -190,12 +319,14 @@ class TestContradictionsEndpoint:
             mock_repo = mock_repo_class.return_value
             mock_repo.get_contradictions_for_interview = AsyncMock(return_value=[mock_ct])
 
-            response = client.get("/api/v1/evidence/contradictions/int_001")
+            response = client.get(
+                f"/api/v1/evidence/contradictions/{interview_id}", headers=headers
+            )
 
             assert response.status_code == 200
             data = response.json()
 
-            assert data["interview_id"] == "int_001"
+            assert data["interview_id"] == interview_id
             assert data["total_count"] == 1
             assert len(data["contradictions"]) == 1
 
@@ -206,17 +337,36 @@ class TestContradictionsEndpoint:
 
     def test_get_contradictions_filtered(self):
         """Test filtering contradictions by status."""
+        token, user_id = _register_user()
+        interview_id = new_id("interview")
+        _seed_interview(user_id, interview_id)
+        headers = {"Authorization": f"Bearer {token}"}
+
         with patch("app.api.v1.evidence.EvidenceRepository") as mock_repo_class:
             mock_repo = mock_repo_class.return_value
             mock_repo.get_contradictions_for_interview = AsyncMock(return_value=[])
 
             response = client.get(
-                "/api/v1/evidence/contradictions/int_001?resolution_status=CLARIFIED"
+                f"/api/v1/evidence/contradictions/{interview_id}?resolution_status=CLARIFIED",
+                headers=headers,
             )
 
             assert response.status_code == 200
             data = response.json()
             assert data["total_count"] == 0
+
+    def test_get_contradictions_unauthorized(self):
+        """Test that an interview not owned by the user returns 404."""
+        token, _user_id = _register_user()
+        _other_token, other_user_id = _register_user()
+        interview_id = new_id("interview")
+        _seed_interview(other_user_id, interview_id)  # owned by someone else
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = client.get(
+            f"/api/v1/evidence/contradictions/{interview_id}", headers=headers
+        )
+        assert response.status_code == 404
 
 
 class TestEvidenceEndpoint:
@@ -224,9 +374,15 @@ class TestEvidenceEndpoint:
 
     def test_get_evidence_for_verification_point(self):
         """Test getting evidence for a verification point."""
+        token, user_id = _register_user()
+        vp_id = new_id("vp")
+        claim_id = new_id("claim")
+        _seed_resume_claim(user_id, claim_id, vp_id=vp_id)
+        headers = {"Authorization": f"Bearer {token}"}
+
         mock_vp = VerificationPoint(
-            verification_point_id="vp_001",
-            claim_id="claim_001",
+            verification_point_id=vp_id,
+            claim_id=claim_id,
             competency_code="backend.cache",
             requirement_id=None,
             aspect="Redis implementation",
@@ -239,7 +395,7 @@ class TestEvidenceEndpoint:
 
         mock_ev = Evidence(
             evidence_id="ev_001",
-            verification_point_id="vp_001",
+            verification_point_id=vp_id,
             interview_id="int_001",
             answer_id="ans_001",
             evidence_type="DIRECT",
@@ -260,12 +416,14 @@ class TestEvidenceEndpoint:
             mock_repo.get_verification_point = AsyncMock(return_value=mock_vp)
             mock_repo.get_evidence_for_verification_point = AsyncMock(return_value=[mock_ev])
 
-            response = client.get("/api/v1/evidence/evidence/vp_001")
+            response = client.get(
+                f"/api/v1/evidence/evidence/{vp_id}", headers=headers
+            )
 
             assert response.status_code == 200
             data = response.json()
 
-            assert data["verification_point_id"] == "vp_001"
+            assert data["verification_point_id"] == vp_id
             assert data["evidence_count"] == 1
             assert len(data["evidence"]) == 1
             assert data["evidence"][0]["evidence_type"] == "DIRECT"
@@ -273,10 +431,18 @@ class TestEvidenceEndpoint:
 
     def test_get_evidence_not_found(self):
         """Test getting evidence for nonexistent VP."""
+        token, user_id = _register_user()
+        vp_id = new_id("vp")
+        claim_id = new_id("claim")
+        _seed_resume_claim(user_id, claim_id, vp_id=vp_id)
+        headers = {"Authorization": f"Bearer {token}"}
+
         with patch("app.api.v1.evidence.EvidenceRepository") as mock_repo_class:
             mock_repo = mock_repo_class.return_value
             mock_repo.get_verification_point = AsyncMock(return_value=None)
 
-            response = client.get("/api/v1/evidence/evidence/nonexistent")
+            response = client.get(
+                f"/api/v1/evidence/evidence/{vp_id}", headers=headers
+            )
 
             assert response.status_code == 404

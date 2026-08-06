@@ -63,7 +63,8 @@ def test_fake_finish_answer_is_excluded_from_structured_questions():
     assert summary["questions_answered"] == 1
 
     context = _build_report_context(state)
-    assert "Questions Asked: 2" in context
+    # The forced-finish question is excluded entirely, so asked == answered.
+    assert "Questions Asked: 1" in context
     assert "Questions Answered: 1" in context
     assert "Authoritative Overall Score: 80.0/100" in context
     assert "[END OF INTERVIEW]" not in context
