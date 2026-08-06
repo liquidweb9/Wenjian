@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
@@ -11,15 +12,38 @@ from app.api.errors import (
     validation_error_handler,
 )
 from app.api.middleware import RequestIDMiddleware
-from app.api.v1 import health, resumes, interviews, reports, dashboard, analytics, auth, job_targets, claim_gap, evidence
+from app.api.v1 import (
+    abilities,
+    analytics,
+    answer_diff,
+    auth,
+    claim_gap,
+    dashboard,
+    evidence,
+    health,
+    interviews,
+    job_targets,
+    reports,
+    resumes,
+    training_plans,
+)
 from app.core.config import settings
 from app.core.exceptions import AppError
+from app.evals.prompt_registry import load_prompts_from_file
 from app.observability.logging import logger
+
+INTERVIEW_PROMPTS_FILE = Path(__file__).resolve().parent / "evals" / "prompts" / "interview_prompts_v2.json"
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("app_start", env=settings.app_env, model=settings.llm_model_balanced)
+    # Seed interview prompt versions: English kept as v1 (previous), Chinese
+    # registered as v2 (current/active). Idempotent; failure must not block startup.
+    try:
+        await load_prompts_from_file(INTERVIEW_PROMPTS_FILE)
+    except Exception as e:
+        logger.warning("prompt_seed_failed", error=str(e))
     yield
     logger.info("app_shutdown")
 
@@ -57,3 +81,6 @@ app.include_router(auth.router, prefix="/api/v1")
 app.include_router(job_targets.router, prefix="/api/v1")
 app.include_router(claim_gap.router, prefix="/api/v1")
 app.include_router(evidence.router, prefix="/api/v1")
+app.include_router(abilities.router, prefix="/api/v1")
+app.include_router(answer_diff.router, prefix="/api/v1")
+app.include_router(training_plans.router, prefix="/api/v1")

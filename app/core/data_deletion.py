@@ -3,19 +3,33 @@
 M2.6: Handles cascade deletion of user data while preserving audit trail.
 """
 
+from typing import Any, Dict
+
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
-from typing import Dict, Any
 
 from app.persistence.models import (
-    User,
-    ResumeSource,
-    Interview,
-    JobTarget,
     AbilityObservation,
     AbilityProfile,
-    TrainingTask,
+    ClaimCompetencyMapping,
+    ClaimRequirementMapping,
+    Contradiction,
+    Evidence,
+    EvidenceTransition,
+    Interview,
+    InterviewAnswer,
+    InterviewQuestion,
+    InterviewReport,
+    JobTarget,
     LLMCall,
+    ResumeBlock,
+    ResumeClaim,
+    ResumeProfile,
+    ResumeRevision,
+    ResumeSource,
+    TrainingTask,
+    User,
+    VerificationPoint,
 )
 
 
@@ -35,15 +49,14 @@ class DataDeletionService:
         Returns:
             Dict with deletion statistics
 
-        Deletion order (respects foreign keys):
-        1. TrainingTask (references user_id)
-        2. AbilityProfile (references user_id)
-        3. AbilityObservation (references user_id)
-        4. Interviews + cascade (questions, answers, reports, contradictions, evidence, transitions, verification_points)
-        5. Resumes + cascade (revisions, blocks, profiles, claims, mappings)
-        6. JobTargets (references user_id)
-        7. LLMCall (audit trail - anonymize if preserve_audit=True)
-        8. User
+        Deletion order (children before parents so foreign keys hold on
+        PostgreSQL, where FK constraints are enforced):
+        1. TrainingTask / AbilityProfile / AbilityObservation (reference user_id)
+        2. LLMCall audit (anonymize or delete by interview_id, before interviews go)
+        3. Interview children -> Interviews
+        4. Claim mappings / verification points -> ResumeClaims / Profiles / Blocks / Revisions -> ResumeSources
+        5. JobTargets
+        6. User
         """
         stats = {
             "training_tasks": 0,
@@ -57,56 +70,30 @@ class DataDeletionService:
             "user_deleted": False,
         }
 
-        # Step 1: Delete TrainingTask records
+        # Step 1: User-scoped child tables
         result = await self.session.execute(
             delete(TrainingTask).where(TrainingTask.user_id == user_id)
         )
         stats["training_tasks"] = result.rowcount
 
-        # Step 2: Delete AbilityProfile records
         result = await self.session.execute(
             delete(AbilityProfile).where(AbilityProfile.user_id == user_id)
         )
         stats["ability_profiles"] = result.rowcount
 
-        # Step 3: Delete AbilityObservation records
         result = await self.session.execute(
             delete(AbilityObservation).where(AbilityObservation.user_id == user_id)
         )
         stats["ability_observations"] = result.rowcount
 
-        # Step 4: Get interview IDs then delete (cascade handled by DB)
-        interview_stmt = select(Interview.interview_id).where(Interview.user_id == user_id)
-        interview_result = await self.session.execute(interview_stmt)
+        # Step 2: Collect interview IDs, then handle LLMCall audit before deleting interviews
+        interview_result = await self.session.execute(
+            select(Interview.interview_id).where(Interview.user_id == user_id)
+        )
         interview_ids = [row[0] for row in interview_result]
 
         if interview_ids:
-            result = await self.session.execute(
-                delete(Interview).where(Interview.user_id == user_id)
-            )
-            stats["interviews"] = result.rowcount
-
-        # Step 5: Get resume IDs then delete (cascade handled by DB)
-        resume_stmt = select(ResumeSource.resume_id).where(ResumeSource.user_id == user_id)
-        resume_result = await self.session.execute(resume_stmt)
-        resume_ids = [row[0] for row in resume_result]
-
-        if resume_ids:
-            result = await self.session.execute(
-                delete(ResumeSource).where(ResumeSource.user_id == user_id)
-            )
-            stats["resumes"] = result.rowcount
-
-        # Step 6: Delete JobTarget records (can be null user_id for templates)
-        result = await self.session.execute(
-            delete(JobTarget).where(JobTarget.user_id == user_id)
-        )
-        stats["job_targets"] = result.rowcount
-
-        # Step 7: Handle LLMCall audit records
-        if interview_ids:
             if preserve_audit:
-                # Anonymize: set user_id to NULL, keep call record
                 llm_calls = await self.session.execute(
                     select(LLMCall).where(LLMCall.interview_id.in_(interview_ids))
                 )
@@ -114,13 +101,88 @@ class DataDeletionService:
                     call.interview_id = None  # Anonymize
                     stats["llm_calls_anonymized"] += 1
             else:
-                # Full deletion
                 result = await self.session.execute(
                     delete(LLMCall).where(LLMCall.interview_id.in_(interview_ids))
                 )
                 stats["llm_calls_deleted"] = result.rowcount
 
-        # Step 8: Delete user record
+        # Step 3: Interview children, then interviews
+        if interview_ids:
+            await self.session.execute(
+                delete(EvidenceTransition).where(EvidenceTransition.interview_id.in_(interview_ids))
+            )
+            await self.session.execute(
+                delete(Evidence).where(Evidence.interview_id.in_(interview_ids))
+            )
+            await self.session.execute(
+                delete(Contradiction).where(Contradiction.interview_id.in_(interview_ids))
+            )
+            await self.session.execute(
+                delete(InterviewReport).where(InterviewReport.interview_id.in_(interview_ids))
+            )
+            await self.session.execute(
+                delete(InterviewAnswer).where(InterviewAnswer.interview_id.in_(interview_ids))
+            )
+            await self.session.execute(
+                delete(InterviewQuestion).where(InterviewQuestion.interview_id.in_(interview_ids))
+            )
+            result = await self.session.execute(
+                delete(Interview).where(Interview.user_id == user_id)
+            )
+            stats["interviews"] = result.rowcount
+
+        # Step 4: Resume children, then resumes
+        resume_result = await self.session.execute(
+            select(ResumeSource.resume_id).where(ResumeSource.user_id == user_id)
+        )
+        resume_ids = [row[0] for row in resume_result]
+
+        if resume_ids:
+            claim_result = await self.session.execute(
+                select(ResumeClaim.claim_id).where(ResumeClaim.resume_id.in_(resume_ids))
+            )
+            claim_ids = [row[0] for row in claim_result]
+            if claim_ids:
+                await self.session.execute(
+                    delete(ClaimCompetencyMapping).where(ClaimCompetencyMapping.claim_id.in_(claim_ids))
+                )
+                await self.session.execute(
+                    delete(ClaimRequirementMapping).where(ClaimRequirementMapping.claim_id.in_(claim_ids))
+                )
+                # Verification points reference claim_id (and requirement_id); evidence/
+                # transitions/contradictions referencing them are already gone in step 3.
+                await self.session.execute(
+                    delete(VerificationPoint).where(VerificationPoint.claim_id.in_(claim_ids))
+                )
+            await self.session.execute(
+                delete(ResumeClaim).where(ResumeClaim.resume_id.in_(resume_ids))
+            )
+            await self.session.execute(
+                delete(ResumeProfile).where(ResumeProfile.resume_id.in_(resume_ids))
+            )
+            revision_result = await self.session.execute(
+                select(ResumeRevision.revision_id).where(ResumeRevision.resume_id.in_(resume_ids))
+            )
+            revision_ids = [row[0] for row in revision_result]
+            if revision_ids:
+                await self.session.execute(
+                    delete(ResumeBlock).where(ResumeBlock.revision_id.in_(revision_ids))
+                )
+                await self.session.execute(
+                    delete(ResumeRevision).where(ResumeRevision.resume_id.in_(resume_ids))
+                )
+            result = await self.session.execute(
+                delete(ResumeSource).where(ResumeSource.user_id == user_id)
+            )
+            stats["resumes"] = result.rowcount
+
+        # Step 5: JobTarget records (can be null user_id for templates)
+        result = await self.session.execute(
+            delete(JobTarget).where(JobTarget.user_id == user_id)
+        )
+        stats["job_targets"] = result.rowcount
+
+        # Step 6: Delete user record
         result = await self.session.execute(
             delete(User).where(User.user_id == user_id)
         )
@@ -138,13 +200,10 @@ class DataDeletionService:
         Returns:
             True if deleted, False if not found or unauthorized
 
-        Cascade deletes:
-        - ResumeRevision
-        - ResumeBlock
-        - ResumeProfile
-        - ResumeClaim
-        - ClaimCompetencyMapping
-        - ClaimRequirementMapping
+        Cascade deletes (children first for PostgreSQL FK enforcement):
+        - Claim mappings, verification points, claims, profiles
+        - Blocks and revisions
+        - The resume source
         """
         # Verify ownership
         stmt = select(ResumeSource).where(
@@ -157,8 +216,36 @@ class DataDeletionService:
         if not resume:
             return False
 
-        # Delete (cascade handled by DB foreign keys)
-        await self.session.delete(resume)
+        claim_result = await self.session.execute(
+            select(ResumeClaim.claim_id).where(ResumeClaim.resume_id == resume_id)
+        )
+        claim_ids = [row[0] for row in claim_result]
+        if claim_ids:
+            await self.session.execute(
+                delete(ClaimCompetencyMapping).where(ClaimCompetencyMapping.claim_id.in_(claim_ids))
+            )
+            await self.session.execute(
+                delete(ClaimRequirementMapping).where(ClaimRequirementMapping.claim_id.in_(claim_ids))
+            )
+            await self.session.execute(
+                delete(VerificationPoint).where(VerificationPoint.claim_id.in_(claim_ids))
+            )
+        await self.session.execute(delete(ResumeClaim).where(ResumeClaim.resume_id == resume_id))
+        await self.session.execute(delete(ResumeProfile).where(ResumeProfile.resume_id == resume_id))
+
+        revision_result = await self.session.execute(
+            select(ResumeRevision.revision_id).where(ResumeRevision.resume_id == resume_id)
+        )
+        revision_ids = [row[0] for row in revision_result]
+        if revision_ids:
+            await self.session.execute(
+                delete(ResumeBlock).where(ResumeBlock.revision_id.in_(revision_ids))
+            )
+            await self.session.execute(
+                delete(ResumeRevision).where(ResumeRevision.resume_id == resume_id)
+            )
+
+        await self.session.execute(delete(ResumeSource).where(ResumeSource.resume_id == resume_id))
         return True
 
     async def delete_interview(self, interview_id: str, user_id: str, preserve_audit: bool = True) -> bool:
@@ -172,14 +259,9 @@ class DataDeletionService:
         Returns:
             True if deleted, False if not found or unauthorized
 
-        Cascade deletes:
-        - InterviewQuestion
-        - InterviewAnswer
-        - InterviewReport
-        - VerificationPoint
-        - Evidence
-        - EvidenceTransition
-        - Contradiction
+        Cascade deletes (children first for PostgreSQL FK enforcement):
+        - Evidence transitions, evidence, contradictions, report, answers, questions
+        - The interview
         """
         # Verify ownership
         stmt = select(Interview).where(
@@ -192,7 +274,7 @@ class DataDeletionService:
         if not interview:
             return False
 
-        # Handle LLMCall audit records
+        # Handle LLMCall audit records before the interview is deleted
         if preserve_audit:
             llm_calls = await self.session.execute(
                 select(LLMCall).where(LLMCall.interview_id == interview_id)
@@ -204,8 +286,25 @@ class DataDeletionService:
                 delete(LLMCall).where(LLMCall.interview_id == interview_id)
             )
 
-        # Delete interview (cascade handled by DB)
-        await self.session.delete(interview)
+        await self.session.execute(
+            delete(EvidenceTransition).where(EvidenceTransition.interview_id == interview_id)
+        )
+        await self.session.execute(
+            delete(Evidence).where(Evidence.interview_id == interview_id)
+        )
+        await self.session.execute(
+            delete(Contradiction).where(Contradiction.interview_id == interview_id)
+        )
+        await self.session.execute(
+            delete(InterviewReport).where(InterviewReport.interview_id == interview_id)
+        )
+        await self.session.execute(
+            delete(InterviewAnswer).where(InterviewAnswer.interview_id == interview_id)
+        )
+        await self.session.execute(
+            delete(InterviewQuestion).where(InterviewQuestion.interview_id == interview_id)
+        )
+        await self.session.execute(delete(Interview).where(Interview.interview_id == interview_id))
         return True
 
     async def delete_job_target(self, job_target_id: str, user_id: str) -> bool:

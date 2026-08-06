@@ -1,4 +1,4 @@
-import { api } from "@/lib/api-client"
+import { api, getAuthToken } from "@/lib/api-client"
 
 export interface InterviewListParams {
   page?: number
@@ -35,6 +35,7 @@ export interface CreateInterviewParams {
   resume_revision_id: string
   target_role: string
   job_description?: string
+  job_target_id?: string
   mode?: string
   max_turns?: number
 }
@@ -52,6 +53,7 @@ export interface InterviewDetail {
   interview_id: string
   thread_id: string
   resume_id?: string
+  job_target_id?: string
   target_role?: string
   mode?: string
   status: string
@@ -91,8 +93,13 @@ export async function createInterview(params: CreateInterviewParams) {
     resume_revision_id: params.resume_revision_id,
     target_role: params.target_role,
     job_description: params.job_description || null,
+    job_target_id: params.job_target_id || null,
     mode: params.mode || "simulation",
     max_turns: params.max_turns ?? 15,
+  }, {
+    // Build plan + generate the first question are LLM calls that routinely
+    // exceed the global 120s timeout even though the server completes normally.
+    timeout: 600_000,
   })
   return data
 }
@@ -121,7 +128,16 @@ export async function submitAnswer(
 }
 
 export async function finishInterview(interviewId: string) {
-  const { data } = await api.post(`/interviews/${interviewId}/finish`)
+  const { data } = await api.post(
+    `/interviews/${interviewId}/finish`,
+    undefined,
+    {
+      // generate_report aggregates evidence, ability observations, and training
+      // plan — LLM-heavy, routinely exceeds the global 120s timeout even when
+      // the server completes normally.
+      timeout: 600_000,
+    },
+  )
   return data
 }
 
@@ -130,8 +146,11 @@ export async function getInterviewEvents(
   onEvent: (event: Record<string, unknown>) => void,
   signal: AbortSignal,
 ) {
+  const headers: Record<string, string> = { Accept: "text/event-stream" }
+  const token = getAuthToken()
+  if (token) headers.Authorization = `Bearer ${token}`
   const response = await fetch(`/api/v1/interviews/${interviewId}/events`, {
-    headers: { Accept: "text/event-stream" },
+    headers,
     signal,
   })
 

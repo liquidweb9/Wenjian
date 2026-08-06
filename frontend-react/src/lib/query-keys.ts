@@ -22,6 +22,9 @@ export const queryKeys = {
     summary: ["analytics", "summary"] as const,
     trends: ["analytics", "trends"] as const,
   },
+  abilities: {
+    profile: (resumeId: string) => ["abilities", "profile", resumeId] as const,
+  },
   evidence: {
     all: ["evidence"] as const,
     verificationPoints: (claimId: string) => ["evidence", "verification-points", claimId] as const,
@@ -31,5 +34,12 @@ export const queryKeys = {
       return status ? ([...base, status] as const) : base
     },
     evidence: (verificationPointId: string) => ["evidence", "evidence", verificationPointId] as const,
+  },
+  answerDiff: {
+    versions: (interviewId: string, questionId: string) =>
+      ["answer-diff", "versions", interviewId, questionId] as const,
+  },
+  trainingPlan: {
+    list: (resumeId?: string) => ["training-plan", "list", resumeId] as const,
   },
 }

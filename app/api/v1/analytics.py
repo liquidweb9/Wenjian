@@ -1,27 +1,38 @@
 """Analytics endpoints — trends, distributions, ability summaries."""
 
 from collections import defaultdict
+from typing import Annotated
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.deps import get_current_user
 from app.persistence.database import get_session
-from app.persistence.models import Interview, InterviewReport
+from app.persistence.models import Interview, InterviewReport, User
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
 
 @router.get("/summary")
-async def get_analytics_summary(session: AsyncSession = Depends(get_session)):
+async def get_analytics_summary(
+    session: Annotated[AsyncSession, Depends(get_session)],
+    user: Annotated[User, Depends(get_current_user)],
+):
     """Aggregated analytics — score distribution, top/weak abilities, verification rates."""
 
-    total_r = await session.execute(select(func.count(Interview.interview_id)))
+    total_r = await session.execute(
+        select(func.count(Interview.interview_id)).where(
+            Interview.user_id == user.user_id
+        )
+    )
     total_interviews = total_r.scalar() or 0
 
-    # Pull reports
+    # Pull reports (current user only)
     reports_r = await session.execute(
         select(InterviewReport.data)
+        .join(Interview, Interview.interview_id == InterviewReport.interview_id)
+        .where(Interview.user_id == user.user_id)
     )
     report_data = [r[0] for r in reports_r.all() if isinstance(r[0], dict)]
 
@@ -88,7 +99,10 @@ async def get_analytics_summary(session: AsyncSession = Depends(get_session)):
 
 
 @router.get("/trends")
-async def get_analytics_trends(session: AsyncSession = Depends(get_session)):
+async def get_analytics_trends(
+    session: Annotated[AsyncSession, Depends(get_session)],
+    user: Annotated[User, Depends(get_current_user)],
+):
     """Time-series trends for interviews and abilities."""
 
     interviews_r = await session.execute(
@@ -96,12 +110,16 @@ async def get_analytics_trends(session: AsyncSession = Depends(get_session)):
             Interview.created_at,
             Interview.status,
             Interview.interview_id,
-        ).order_by(Interview.created_at.asc())
+        )
+        .where(Interview.user_id == user.user_id)
+        .order_by(Interview.created_at.asc())
     )
     interviews = interviews_r.all()
 
     reports_r = await session.execute(
         select(InterviewReport.interview_id, InterviewReport.data, InterviewReport.created_at)
+        .join(Interview, Interview.interview_id == InterviewReport.interview_id)
+        .where(Interview.user_id == user.user_id)
     )
     reports = {(r[0], r[2]): r[1] for r in reports_r.all() if isinstance(r[1], dict)}
 

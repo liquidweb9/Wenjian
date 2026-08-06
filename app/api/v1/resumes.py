@@ -1,6 +1,7 @@
 """Resume management API endpoints."""
 
 import hashlib
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel
@@ -10,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.v1.schemas import PaginatedResponse
+from app.core.deps import get_current_user
 from app.core.enums import ResumeStatus
 from app.core.ids import new_revision_id
 from app.observability.logging import logger
@@ -24,6 +26,7 @@ from app.persistence.models import (
     ResumeBlock,
     ResumeRevision,
     ResumeSource,
+    User,
 )
 from app.persistence.models import (
     ResumeClaim as DBClaim,
@@ -35,6 +38,19 @@ from app.resume.claim_selection import select_core_claims
 from app.resume.service import ResumeService
 
 router = APIRouter(prefix="/resumes", tags=["resumes"])
+
+
+async def _resume_owned_by(
+    session: AsyncSession, resume_id: str, user_id: str
+) -> ResumeSource | None:
+    """Fetch a resume only if it belongs to the given user (else None)."""
+    result = await session.execute(
+        select(ResumeSource).where(
+            ResumeSource.resume_id == resume_id,
+            ResumeSource.user_id == user_id,
+        )
+    )
+    return result.scalar_one_or_none()
 
 
 class TextUploadRequest(BaseModel):
@@ -62,6 +78,7 @@ async def _save_resume_to_db(
     session: AsyncSession,
     doc: ResumeDocument,
     content: bytes,
+    user_id: str,
     revision_id: str | None = None,
     sha256: str | None = None,
 ) -> tuple[str, str]:
@@ -72,6 +89,7 @@ async def _save_resume_to_db(
     source = ResumeSource(
         resume_id=doc.resume_id,
         source_id=doc.source_id,
+        user_id=user_id,
         file_name=doc.file_name,
         source_type=doc.source_type,
         sha256=sha256,
@@ -123,6 +141,7 @@ async def list_resumes(
     sort_by: str = "created_at",
     sort_order: str = "desc",
     session: AsyncSession = Depends(get_session),
+    user: Annotated[User, Depends(get_current_user)] = ...,
 ):
     """List resumes with pagination, search, and filtering."""
     # Subquery: latest revision per resume
@@ -157,6 +176,7 @@ async def list_resumes(
             latest_cte.c.revision_id,
         )
         .join(latest_cte, ResumeSource.resume_id == latest_cte.c.resume_id)
+        .where(ResumeSource.user_id == user.user_id)
     )
 
     if search:
@@ -208,6 +228,7 @@ async def list_resumes(
 async def upload_file(
     file: UploadFile = File(...),
     session: AsyncSession = Depends(get_session),
+    user: Annotated[User, Depends(get_current_user)] = ...,
 ):
     """Upload a resume file (PDF, TXT, TEX)."""
     content = await file.read()
@@ -218,7 +239,9 @@ async def upload_file(
     doc = await service.parse_resume(content, file.filename or "resume", mime)
 
     revision_id = new_revision_id()
-    await _save_resume_to_db(session, doc, content, revision_id=revision_id, sha256=sha256)
+    await _save_resume_to_db(
+        session, doc, content, user_id=user.user_id, revision_id=revision_id, sha256=sha256
+    )
 
     logger.info("resume_uploaded", resume_id=doc.resume_id, quality=doc.extraction_quality)
 
@@ -238,6 +261,7 @@ async def upload_file(
 async def upload_text(
     body: TextUploadRequest,
     session: AsyncSession = Depends(get_session),
+    user: Annotated[User, Depends(get_current_user)] = ...,
 ):
     """Upload resume as plain text."""
     content = body.text.encode("utf-8")
@@ -246,7 +270,9 @@ async def upload_text(
     doc = await service.parse_resume(content, body.file_name, "text/plain")
 
     revision_id = new_revision_id()
-    await _save_resume_to_db(session, doc, content, revision_id=revision_id, sha256=sha256)
+    await _save_resume_to_db(
+        session, doc, content, user_id=user.user_id, revision_id=revision_id, sha256=sha256
+    )
 
     logger.info("resume_text_uploaded", resume_id=doc.resume_id, quality=doc.extraction_quality)
 
@@ -265,10 +291,14 @@ async def upload_text(
 async def get_resume(
     resume_id: str,
     session: AsyncSession = Depends(get_session),
+    user: Annotated[User, Depends(get_current_user)] = ...,
 ):
     """Get resume details."""
     result = await session.execute(
-        select(ResumeSource).where(ResumeSource.resume_id == resume_id)
+        select(ResumeSource).where(
+            ResumeSource.resume_id == resume_id,
+            ResumeSource.user_id == user.user_id,
+        )
     )
     source = result.scalar_one_or_none()
     if not source:
@@ -319,8 +349,11 @@ async def get_claims(
     resume_id: str,
     revision_id: str | None = None,
     session: AsyncSession = Depends(get_session),
+    user: Annotated[User, Depends(get_current_user)] = ...,
 ):
     """Get claims for a resume, optionally filtered by revision."""
+    if not await _resume_owned_by(session, resume_id, user.user_id):
+        raise HTTPException(status_code=404, detail="Resume not found")
     query = select(DBClaim).where(DBClaim.resume_id == resume_id)
     if revision_id:
         query = query.where(DBClaim.claim_id.startswith(revision_id[:8]))
@@ -370,8 +403,11 @@ async def update_revision(
     revision_id: str,
     body: RevisionUpdateRequest,
     session: AsyncSession = Depends(get_session),
+    user: Annotated[User, Depends(get_current_user)] = ...,
 ):
     """Update a parsed revision's normalized text and rebuild blocks."""
+    if not await _resume_owned_by(session, resume_id, user.user_id):
+        raise HTTPException(status_code=404, detail="Resume not found")
     result = await session.execute(
         select(ResumeRevision).where(
             ResumeRevision.revision_id == revision_id,
@@ -442,8 +478,11 @@ async def confirm_revision(
     revision_id: str,
     target_role: str = "",
     session: AsyncSession = Depends(get_session),
+    user: Annotated[User, Depends(get_current_user)] = ...,
 ):
     """Confirm a parsed revision and generate profile + claims."""
+    if not await _resume_owned_by(session, resume_id, user.user_id):
+        raise HTTPException(status_code=404, detail="Resume not found")
     result = await session.execute(
         select(ResumeRevision).options(
             selectinload(ResumeRevision.blocks),
@@ -565,8 +604,11 @@ async def update_claim(
     claim_id: str,
     body: ClaimUpdateRequest,
     session: AsyncSession = Depends(get_session),
+    user: Annotated[User, Depends(get_current_user)] = ...,
 ):
     """Update a claim's enabled status or priority."""
+    if not await _resume_owned_by(session, resume_id, user.user_id):
+        raise HTTPException(status_code=404, detail="Resume not found")
     result = await session.execute(
         select(DBClaim).where(
             DBClaim.claim_id == claim_id,
@@ -598,8 +640,11 @@ async def update_claim(
 async def get_revisions(
     resume_id: str,
     session: AsyncSession = Depends(get_session),
+    user: Annotated[User, Depends(get_current_user)] = ...,
 ):
     """Get all revisions for a resume."""
+    if not await _resume_owned_by(session, resume_id, user.user_id):
+        raise HTTPException(status_code=404, detail="Resume not found")
     result = await session.execute(
         select(ResumeRevision)
         .where(ResumeRevision.resume_id == resume_id)
@@ -633,12 +678,16 @@ async def get_revisions(
 async def delete_resume(
     resume_id: str,
     session: AsyncSession = Depends(get_session),
+    user: Annotated[User, Depends(get_current_user)] = ...,
 ):
     """Delete a resume and all associated data (GDPR/right-to-delete).
 
     Covers: claims, profiles, blocks, revisions, source, interviews,
     interview questions, interview answers, interview reports.
     """
+    if not await _resume_owned_by(session, resume_id, user.user_id):
+        raise HTTPException(status_code=404, detail="Resume not found")
+
     # Get all interview IDs for this resume
     interview_ids_r = await session.execute(
         select(Interview.interview_id).where(Interview.resume_id == resume_id)

@@ -4,6 +4,7 @@ import asyncio
 import json
 import uuid
 from datetime import datetime
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
@@ -13,6 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.sse_manager import sse_manager
+from app.core.deps import get_current_user
 from app.core.enums import NextAction
 from app.core.ids import new_answer_id, new_id, new_interview_id, new_question_id, new_thread_id
 from app.interview.coaching import coaching_from_evidence
@@ -30,10 +32,25 @@ from app.persistence.models import (
     ResumeClaim,
     ResumeProfile,
     ResumeRevision,
+    ResumeSource,
+    User,
 )
 from app.resume.claim_selection import select_core_claims
 
 router = APIRouter(prefix="/interviews", tags=["interviews"])
+
+
+async def _interview_owned_by(
+    session: AsyncSession, interview_id: str, user_id: str
+) -> Interview | None:
+    """Fetch an interview only if it belongs to the given user (else None)."""
+    result = await session.execute(
+        select(Interview).where(
+            Interview.interview_id == interview_id,
+            Interview.user_id == user_id,
+        )
+    )
+    return result.scalar_one_or_none()
 
 
 class CreateInterviewRequest(BaseModel):
@@ -41,6 +58,7 @@ class CreateInterviewRequest(BaseModel):
     resume_revision_id: str
     target_role: str
     job_description: str | None = None
+    job_target_id: str | None = None
     mode: str = "simulation"
     max_turns: int = 15
 
@@ -201,6 +219,7 @@ async def list_interviews(
     sort_by: str = "created_at",
     sort_order: str = "desc",
     session: AsyncSession = Depends(get_session),
+    user: Annotated[User, Depends(get_current_user)] = ...,
 ):
     """List interviews with pagination and filters."""
     base = select(
@@ -218,7 +237,7 @@ async def list_interviews(
         .correlate(Interview)
         .scalar_subquery()
         .label("persisted_turn_count"),
-    )
+    ).where(Interview.user_id == user.user_id)
 
     if status:
         base = base.where(Interview.status == status)
@@ -284,8 +303,11 @@ async def interview_events(
     interview_id: str,
     request: Request,
     session: AsyncSession = Depends(get_session),
+    user: Annotated[User, Depends(get_current_user)] = ...,
 ):
     """SSE endpoint — stream interview events to the client."""
+    if not await _interview_owned_by(session, interview_id, user.user_id):
+        raise HTTPException(status_code=404, detail="Interview not found")
     subscriber_id = uuid.uuid4().hex[:12]
     queue = await sse_manager.subscribe(interview_id, subscriber_id)
 
@@ -373,8 +395,18 @@ async def interview_events(
 async def create_interview(
     body: CreateInterviewRequest,
     session: AsyncSession = Depends(get_session),
+    user: Annotated[User, Depends(get_current_user)] = ...,
 ):
     """Create a new interview session."""
+    # Verify resume belongs to the current user
+    resume_result = await session.execute(
+        select(ResumeSource).where(
+            ResumeSource.resume_id == body.resume_id,
+            ResumeSource.user_id == user.user_id,
+        )
+    )
+    if not resume_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Resume not found")
     # Verify resume is confirmed
     rev_result = await session.execute(
         select(ResumeRevision).where(
@@ -463,7 +495,9 @@ async def create_interview(
     interview = Interview(
         interview_id=interview_id,
         thread_id=thread_id,
+        user_id=user.user_id,
         resume_id=body.resume_id,
+        job_target_id=body.job_target_id,
         target_role=body.target_role,
         job_description=body.job_description,
         mode=body.mode,
@@ -512,10 +546,14 @@ async def create_interview(
 async def get_interview(
     interview_id: str,
     session: AsyncSession = Depends(get_session),
+    user: Annotated[User, Depends(get_current_user)] = ...,
 ):
     """Get interview state."""
     result = await session.execute(
-        select(Interview).where(Interview.interview_id == interview_id)
+        select(Interview).where(
+            Interview.interview_id == interview_id,
+            Interview.user_id == user.user_id,
+        )
     )
     interview = result.scalar_one_or_none()
     if not interview:
@@ -624,10 +662,14 @@ async def submit_answer(
     interview_id: str,
     body: SubmitAnswerRequest,
     session: AsyncSession = Depends(get_session),
+    user: Annotated[User, Depends(get_current_user)] = ...,
 ):
     """Submit answer to current question and continue interview."""
     result = await session.execute(
-        select(Interview).where(Interview.interview_id == interview_id)
+        select(Interview).where(
+            Interview.interview_id == interview_id,
+            Interview.user_id == user.user_id,
+        )
     )
     interview = result.scalar_one_or_none()
     if not interview:
@@ -793,10 +835,14 @@ async def submit_answer(
 async def finish_interview(
     interview_id: str,
     session: AsyncSession = Depends(get_session),
+    user: Annotated[User, Depends(get_current_user)] = ...,
 ):
     """Force finish an interview and generate report."""
     result = await session.execute(
-        select(Interview).where(Interview.interview_id == interview_id)
+        select(Interview).where(
+            Interview.interview_id == interview_id,
+            Interview.user_id == user.user_id,
+        )
     )
     interview = result.scalar_one_or_none()
     if not interview:

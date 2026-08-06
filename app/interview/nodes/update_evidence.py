@@ -79,7 +79,7 @@ async def update_evidence_node(state: InterviewState) -> dict:
     # Initialize Evidence Engine 2.0 components
     llm = AgnesGateway()
     state_machine = EvidenceStateMachine()
-    span_extractor = EvidenceSpanExtractor(llm=llm, id_generator=lambda: new_id("span"))
+    span_extractor = EvidenceSpanExtractor(llm=llm)
     contradiction_detector = ContradictionDetector(llm=llm, id_generator=lambda: new_id("ct"))
 
     # Create database session

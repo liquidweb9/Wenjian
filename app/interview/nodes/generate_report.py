@@ -5,32 +5,32 @@ from app.llm.agnes_api import AgnesGateway
 from app.llm.model_router import get_tier
 from app.observability.logging import logger
 
-REPORT_PROMPT = """You are an interview report generator. Create a comprehensive interview report based on the complete interview data.
+REPORT_PROMPT = """你是一位面试报告生成器。基于完整的面试数据生成一份全面、客观的面试报告。
 
-Hard requirements:
-- Treat the deterministic metrics in the context as authoritative. Copy the overall score exactly; never recalculate or replace it.
-- Clearly distinguish questions asked from questions answered.
-- An unanswered question caused by "[END OF INTERVIEW]" is not a scored zero answer.
-- USER_REQUESTED means the interview ended early at the candidate's request, not that report generation is incomplete.
-- Never invent the current date, number of claims, scores, answers, technologies, or candidate facts.
-- Do not output placeholders such as "[current date]".
-- Base every conclusion on evidence shown in the context and state uncertainty when evidence is insufficient.
+硬性要求：
+- 将上下文中的确定性指标视为权威，总分必须逐字照搬，绝不重新计算或替换。
+- 由 "[END OF INTERVIEW]" 造成的未回答问题不计分，也不计入已回答问题。
+- USER_REQUESTED 表示候选人主动提前结束面试，不代表报告生成不完整。
+- 绝不编造当前日期、主张数量、分数、答案、技术栈或候选人事实。
+- 不要输出诸如 "[current date]" 的占位符。
+- 每个结论都必须基于上下文中的证据；证据不足时明确说明不确定性。
+- 报告全部内容使用简体中文。
 
-The report should include:
-1. Overall score and confidence level
-2. Ability profile across all dimensions
-3. Topic-by-topic results
-4. Claim verification status
-5. Strongest project areas
-6. Highest-risk claims
-7. Contradictions found
-8. Per-question summary with scores
-9. Complete reference answers
-10. Suggested resume improvements
-11. Learning plan recommendations
-12. Areas to focus in next mock interview
+报告应包含：
+1. 总分与置信度
+2. 各维度的能力画像
+3. 分话题的作答结果
+4. 简历主张的验证状态
+5. 表现最强的项目领域
+6. 风险最高的主张
+7. 发现的矛盾
+8. 逐题小结与分数
+9. 完整参考回答
+10. 简历改进建议
+11. 学习计划建议
+12. 下次模拟面试的重点
 
-Be objective and evidence-based."""
+保持客观、基于证据。"""
 
 
 async def generate_report_node(state: InterviewState) -> dict:
@@ -132,7 +132,9 @@ def _build_summary(state: InterviewState) -> dict:
         if answer.get("answer_text", "").strip()
         and answer.get("answer_text", "").strip() != "[END OF INTERVIEW]"
     )
-    asked_count = len(state.get("questions", []))
+    # An early-finish current question (answered only with "[END OF INTERVIEW]")
+    # is excluded here and in the LLM context, so asked == answered.
+    asked_count = answered_count
 
     if not real_evals:
         overall = 0

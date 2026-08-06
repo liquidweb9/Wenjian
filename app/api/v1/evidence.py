@@ -5,20 +5,64 @@ transitions, and contradictions.
 """
 
 from typing import Annotated
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.deps import get_current_user
 from app.persistence.database import get_session
 from app.persistence.models import (
+    Interview,
+    ResumeClaim,
+    ResumeSource,
+    User,
     VerificationPoint,
-    Evidence,
-    EvidenceTransition,
-    Contradiction,
 )
 from app.persistence.repositories.evidence_repo import EvidenceRepository
 
 router = APIRouter(prefix="/evidence", tags=["evidence"])
+
+
+async def _vp_owned_by(
+    session: AsyncSession, verification_point_id: str, user_id: str
+) -> bool:
+    """True if the verification point's claim belongs to the given user."""
+    result = await session.execute(
+        select(VerificationPoint.verification_point_id)
+        .join(ResumeClaim, ResumeClaim.claim_id == VerificationPoint.claim_id)
+        .join(ResumeSource, ResumeSource.resume_id == ResumeClaim.resume_id)
+        .where(
+            VerificationPoint.verification_point_id == verification_point_id,
+            ResumeSource.user_id == user_id,
+        )
+    )
+    return result.scalar_one_or_none() is not None
+
+
+async def _claim_owned_by(
+    session: AsyncSession, claim_id: str, user_id: str
+) -> bool:
+    """True if the claim's resume belongs to the given user."""
+    result = await session.execute(
+        select(ResumeClaim.claim_id)
+        .join(ResumeSource, ResumeSource.resume_id == ResumeClaim.resume_id)
+        .where(ResumeClaim.claim_id == claim_id, ResumeSource.user_id == user_id)
+    )
+    return result.scalar_one_or_none() is not None
+
+
+async def _interview_owned_by(
+    session: AsyncSession, interview_id: str, user_id: str
+) -> bool:
+    """True if the interview belongs to the given user."""
+    result = await session.execute(
+        select(Interview.interview_id).where(
+            Interview.interview_id == interview_id,
+            Interview.user_id == user_id,
+        )
+    )
+    return result.scalar_one_or_none() is not None
 
 
 # ============================================================
@@ -176,6 +220,7 @@ class ContradictionResponse:
 async def get_verification_points_for_claim(
     claim_id: str,
     session: Annotated[AsyncSession, Depends(get_session)],
+    user: Annotated[User, Depends(get_current_user)] = ...,
 ):
     """Get all verification points for a claim.
 
@@ -186,6 +231,8 @@ async def get_verification_points_for_claim(
     Returns:
         List of verification points with evidence counts
     """
+    if not await _claim_owned_by(session, claim_id, user.user_id):
+        raise HTTPException(status_code=404, detail="Claim not found")
     evidence_repo = EvidenceRepository(session)
 
     # Get verification points
@@ -239,6 +286,7 @@ async def get_verification_points_for_claim(
 async def get_transitions_for_verification_point(
     verification_point_id: str,
     session: Annotated[AsyncSession, Depends(get_session)],
+    user: Annotated[User, Depends(get_current_user)] = ...,
 ):
     """Get transition history for a verification point.
 
@@ -249,6 +297,8 @@ async def get_transitions_for_verification_point(
     Returns:
         List of transitions in chronological order
     """
+    if not await _vp_owned_by(session, verification_point_id, user.user_id):
+        raise HTTPException(status_code=404, detail="Verification point not found")
     evidence_repo = EvidenceRepository(session)
 
     # Get verification point
@@ -287,6 +337,7 @@ async def get_transitions_for_verification_point(
 async def get_contradictions_for_interview(
     interview_id: str,
     session: Annotated[AsyncSession, Depends(get_session)],
+    user: Annotated[User, Depends(get_current_user)] = ...,
     resolution_status: str | None = None,
 ):
     """Get contradictions for an interview.
@@ -299,6 +350,8 @@ async def get_contradictions_for_interview(
     Returns:
         List of contradictions
     """
+    if not await _interview_owned_by(session, interview_id, user.user_id):
+        raise HTTPException(status_code=404, detail="Interview not found")
     evidence_repo = EvidenceRepository(session)
 
     # Get contradictions
@@ -338,6 +391,7 @@ async def get_contradictions_for_interview(
 async def get_evidence_for_verification_point(
     verification_point_id: str,
     session: Annotated[AsyncSession, Depends(get_session)],
+    user: Annotated[User, Depends(get_current_user)] = ...,
 ):
     """Get all evidence for a verification point.
 
@@ -348,6 +402,8 @@ async def get_evidence_for_verification_point(
     Returns:
         List of evidence records with spans
     """
+    if not await _vp_owned_by(session, verification_point_id, user.user_id):
+        raise HTTPException(status_code=404, detail="Verification point not found")
     evidence_repo = EvidenceRepository(session)
 
     # Get verification point

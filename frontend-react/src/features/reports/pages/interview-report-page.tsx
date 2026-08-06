@@ -12,7 +12,13 @@ import { BRAND } from "@/lib/brand"
 import { ClaimStatusCard } from "../components/ClaimStatusCard"
 import { EvidenceTimeline } from "../components/EvidenceTimeline"
 import { ContradictionDisplay } from "../components/ContradictionDisplay"
+import { ClaimPassport } from "../components/ClaimPassport"
+import { JDCoverageSection } from "../components/JDCoverageSection"
+import { UnresolvedIssuesSection } from "../components/UnresolvedIssuesSection"
+import { MultiFormVerificationSection } from "../components/MultiFormVerificationSection"
 import { useVerificationPoints, useTransitions, useContradictions } from "../hooks/use-evidence"
+import { useResumeClaims } from "@/features/resumes/hooks/use-resumes"
+import { useClaimGap } from "@/features/claim-gap/hooks/use-claim-gap"
 
 export default function InterviewReportPage() {
   const { interviewId } = useParams<{ interviewId: string }>()
@@ -21,6 +27,11 @@ export default function InterviewReportPage() {
   const { data: reportData, isLoading } = useReport(interviewId)
   const { data: interview } = useInterview(interviewId)
   const { data: contradictionsData } = useContradictions(interviewId)
+  const { data: claimsData } = useResumeClaims(interview?.resume_id)
+  const { data: gapData } = useClaimGap(
+    interview?.resume_id,
+    interview?.job_target_id || undefined
+  )
   const report = reportData?.report
 
   const [selectedVpId, setSelectedVpId] = useState<string | null>(null)
@@ -160,7 +171,14 @@ export default function InterviewReportPage() {
       <section className="app-surface" style={{ padding: "1.35rem 1.45rem" }}>
         <SectionTitle index={6} title="简历证据一致性" />
 
-        {/* Phase 2: Evidence Engine 2.0 Visualization */}
+        {/* Phase 2: Claim Passport - Comprehensive Evidence Visualization */}
+        {claimsData && claimsData.claims && claimsData.claims.length > 0 ? (
+          <div style={{ marginTop: "1rem" }}>
+            <ClaimPassport claims={claimsData.claims} interviewId={interviewId!} />
+          </div>
+        ) : null}
+
+        {/* Phase 2: Contradictions Display */}
         {contradictionsData && contradictionsData.contradictions.length > 0 && (
           <div style={{ marginTop: "1rem", marginBottom: "1.5rem" }}>
             <ContradictionDisplay contradictions={contradictionsData.contradictions} />
@@ -184,8 +202,8 @@ export default function InterviewReportPage() {
           </div>
         )}
 
-        {/* Phase 1: Legacy Claim Status Display */}
-        {claimEntries.length ? (
+        {/* Phase 1: Legacy Claim Status Display - Fallback when no Phase 2 data */}
+        {(!claimsData || !claimsData.claims || claimsData.claims.length === 0) && claimEntries.length ? (
           <div style={{ display: "grid", gap: "0.75rem", marginTop: "1rem" }}>
             {claimEntries.map(([claimId, claimStatus]) => (
               <ClaimStatusSection
@@ -196,13 +214,46 @@ export default function InterviewReportPage() {
               />
             ))}
           </div>
-        ) : (
+        ) : null}
+
+        {/* Empty state if no data at all */}
+        {(!claimsData || !claimsData.claims || claimsData.claims.length === 0) && !claimEntries.length && (
           <MarkdownBlock content={extractNumberedSections(reportText, [6]) || "暂无结构化证据一致性数据。"} />
         )}
       </section>
 
+      {/* Phase 2.2: JD Coverage Section */}
+      {gapData && (
+        <section className="app-surface" style={{ padding: "1.35rem 1.45rem" }}>
+          <SectionTitle index={7} title="岗位要求覆盖度" />
+          <div style={{ marginTop: "1rem" }}>
+            <JDCoverageSection gapData={gapData} interviewId={interviewId!} />
+          </div>
+        </section>
+      )}
+
+      {/* Phase 2.2: Unresolved Issues Section */}
       <section className="app-surface" style={{ padding: "1.35rem 1.45rem" }}>
-        <SectionTitle index={7} title="改进建议" />
+        <SectionTitle index={gapData ? 8 : 7} title="待解决问题" />
+        <div style={{ marginTop: "1rem" }}>
+          <UnresolvedIssuesSection
+            contradictions={contradictionsData?.contradictions || []}
+            weakVerificationPoints={[]}
+            interviewId={interviewId!}
+          />
+        </div>
+      </section>
+
+      {/* Phase 2.2: Multi-form Verification Section */}
+      <section className="app-surface" style={{ padding: "1.35rem 1.45rem" }}>
+        <SectionTitle index={gapData ? 9 : 8} title="多形式验证覆盖" />
+        <div style={{ marginTop: "1rem" }}>
+          <MultiFormVerificationSection formCoverageData={[]} />
+        </div>
+      </section>
+
+      <section className="app-surface" style={{ padding: "1.35rem 1.45rem" }}>
+        <SectionTitle index={gapData ? 10 : 9} title="改进建议" />
         {suggestions.length ? (
           <ul style={{ margin: "1rem 0 0", paddingLeft: "1.2rem", color: "var(--wj-text-secondary)", lineHeight: 1.75 }}>
             {suggestions.map((suggestion, index) => (
@@ -217,7 +268,7 @@ export default function InterviewReportPage() {
       </section>
 
       <section className="app-surface" style={{ padding: "1.35rem 1.45rem" }}>
-        <SectionTitle index={8} title="后续训练计划" />
+        <SectionTitle index={gapData ? 11 : 10} title="后续训练计划" />
         {learningPlan.length ? (
           <div style={{ display: "grid", gap: "0.8rem", marginTop: "1rem" }}>
             {learningPlan.map((item, index) => (

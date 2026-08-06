@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import { CheckCircle2, ChevronRight, ClipboardList, FileText, Target } from "lucide-react"
 import { useResumeList } from "@/features/resumes/hooks/use-resumes"
+import { useJobTargets } from "@/features/job-target/hooks/use-job-targets"
 import { useCreateInterview } from "../hooks/use-interviews"
 import { usePreferenceStore } from "@/stores/preference-store"
 import { EmptyState } from "@/components/common/empty-state"
@@ -10,10 +11,10 @@ import { usePageTitle } from "@/lib/use-page-title"
 
 const steps = [
   "选择简历",
-  "设置目标岗位",
+  "选择岗位目标（可选）",
+  "设置目标岗位名称",
   "设置面试模式与轮次",
-  "补充岗位描述",
-  "确认 InterviewPlan 输入",
+  "补充岗位描述（可选）",
   "开始模拟面试",
 ]
 
@@ -27,6 +28,7 @@ export default function InterviewCreatePage() {
 
   const [resumeId, setResumeId] = useState(preselectResumeId)
   const [revisionId, setRevisionId] = useState<string | null>(null)
+  const [jobTargetId, setJobTargetId] = useState<string>("")
   const [targetRole, setTargetRole] = useState("")
   const [jobDescription, setJobDescription] = useState("")
   const [mode, setMode] = useState(preferences.defaultMode)
@@ -37,8 +39,9 @@ export default function InterviewCreatePage() {
     status: "CONFIRMED",
     page_size: 50,
   })
+  const { data: jobTargets } = useJobTargets()
 
-  const confirmedResumes = resumesData?.items ?? []
+  const confirmedResumes = useMemo(() => resumesData?.items ?? [], [resumesData])
 
   useEffect(() => {
     if (preselectResumeId && confirmedResumes.length > 0) {
@@ -74,6 +77,7 @@ export default function InterviewCreatePage() {
       resume_revision_id: revisionId!,
       target_role: targetRole.trim(),
       job_description: jobDescription.trim() || undefined,
+      job_target_id: jobTargetId || undefined,
       mode,
       max_turns: maxTurns,
     })
@@ -146,7 +150,20 @@ export default function InterviewCreatePage() {
                   {errors.resumeId ? <FieldError>{errors.resumeId}</FieldError> : null}
                 </Field>
 
-                <Field label="2. 目标岗位" description="这会影响提问范围、深度和反馈角度。">
+                <Field label="2. 岗位目标（可选）" description="选择已创建的岗位目标，系统将优先考察该岗位的能力缺口。">
+                  <select value={jobTargetId} onChange={(event) => setJobTargetId(event.target.value)} style={fieldInputStyle()}>
+                    <option value="">不选择岗位目标</option>
+                    {(jobTargets || []).map((jobTarget) => (
+                      <option key={jobTarget.job_target_id} value={jobTarget.job_target_id}>
+                        {jobTarget.title}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginTop: "1rem" }}>
+                <Field label="3. 目标岗位名称" description="这会影响提问范围、深度和反馈角度。">
                   <input
                     type="text"
                     value={targetRole}
@@ -156,10 +173,8 @@ export default function InterviewCreatePage() {
                   />
                   {errors.targetRole ? <FieldError>{errors.targetRole}</FieldError> : null}
                 </Field>
-              </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginTop: "1rem" }}>
-                <Field label="3. 面试模式" description="练习模式更轻量，模拟面试更接近真实流程。">
+                <Field label="4. 面试模式" description="练习模式更轻量，模拟面试更接近真实流程。">
                   <div style={{ display: "grid", gap: "0.7rem" }}>
                     <ModeOption
                       active={mode === "simulation"}
@@ -175,9 +190,11 @@ export default function InterviewCreatePage() {
                     />
                   </div>
                 </Field>
+              </div>
 
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginTop: "1rem" }}>
                 <Field
-                  label="4. 最大轮次"
+                  label="5. 最大轮次"
                   description="15 轮只是默认值，可设置 3–30 轮。系统会根据证据是否充分、回答深度与项目覆盖度决定继续追问或切换项目，也可能提前结束。"
                 >
                   <input
@@ -204,7 +221,7 @@ export default function InterviewCreatePage() {
                 </Field>
               </div>
 
-              <Field label="5. 岗位描述（可选）" description="补充 JD 后，问鉴会更容易聚焦岗位背景、技术栈和职责重点。">
+              <Field label="6. 岗位描述（可选）" description="补充 JD 后，问鉴会更容易聚焦岗位背景、技术栈和职责重点。">
                 <textarea
                   value={jobDescription}
                   onChange={(event) => setJobDescription(event.target.value)}
@@ -218,7 +235,7 @@ export default function InterviewCreatePage() {
                 <div className="app-eyebrow">InterviewPlan Preview</div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "0.75rem", marginTop: "0.75rem" }}>
                   <PreviewItem icon={FileText} label="简历来源" value={resumeId ? "已选择" : "待选择"} />
-                  <PreviewItem icon={Target} label="目标岗位" value={targetRole.trim() || "待填写"} />
+                  <PreviewItem icon={Target} label="岗位目标" value={jobTargetId ? "已选择" : "未选择"} />
                   <PreviewItem icon={ClipboardList} label="计划轮次" value={`${maxTurns} 轮`} />
                 </div>
               </section>

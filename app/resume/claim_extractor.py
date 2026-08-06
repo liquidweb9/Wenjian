@@ -24,7 +24,7 @@ Rules:
 2. Combine closely related implementation details from the same subsystem into one coherent claim. Do not create one claim per bullet, library, algorithm, or technology.
 3. Prefer claims showing architecture ownership, a substantial end-to-end implementation, a difficult technical decision, or a quantified outcome.
 4. Do not extract claims from education, skills, awards, or generic self-evaluation.
-5. Each claim must reference the source entry.
+5. Each claim must reference the source entry by copying its exact "id=" value from the entries list. Only reference entries from [experience], [project], or [research] sections.
 6. For vague improvements without baselines, add "UNVERIFIED_IMPROVEMENT" risk flag.
 7. For missing metrics, add "MISSING_METRICS" risk flag.
 8. For unclear role boundaries, add "UNCLEAR_OWNERSHIP" risk flag.
@@ -77,7 +77,7 @@ class ClaimExtractor:
             entries = getattr(profile, section_name, [])
             for entry in entries:
                 parts.append(
-                    f"[{section_name}] {entry.title}"
+                    f"[{section_name}] id={entry.entry_id} | {entry.title}"
                     + (f" @ {entry.organization}" if entry.organization else "")
                     + "\n"
                     + "\n".join(f"  • {b}" for b in entry.bullets)
@@ -99,9 +99,11 @@ class ClaimExtractor:
         counts: dict[str, int] = {}
         seen: set[tuple[str, str]] = set()
         limited: list[ResumeClaim] = []
+        dropped = 0
 
         for claim in claims:
             if claim.entry_id not in valid_entry_ids:
+                dropped += 1
                 continue
             normalized = " ".join(claim.claim_text.lower().split())
             key = (claim.entry_id, normalized)
@@ -112,6 +114,14 @@ class ClaimExtractor:
             limited.append(claim)
             if len(limited) >= 15:
                 break
+
+        if dropped:
+            logger.warning(
+                "claims_dropped_bad_entry_id",
+                dropped=dropped,
+                kept=len(limited),
+                resume_id=profile.resume_id,
+            )
 
         return limited
 

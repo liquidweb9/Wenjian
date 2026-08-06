@@ -1,6 +1,8 @@
 import { useState } from "react"
-import { useParams, useNavigate } from "react-router-dom"
+import { useParams, useNavigate, Link } from "react-router-dom"
 import { useResumeClaims, useUpdateClaim } from "../hooks/use-resumes"
+import { useJobTargets } from "@/features/job-target/hooks/use-job-targets"
+import type { JobTarget } from "@/lib/types/job-target"
 
 const riskLabels: Record<string, string> = {
   UNVERIFIED_IMPROVEMENT: "未验证改进",
@@ -20,10 +22,12 @@ export default function ResumeClaimsPage() {
   const { resumeId } = useParams<{ resumeId: string }>()
   const navigate = useNavigate()
   const { data, isLoading, isError } = useResumeClaims(resumeId)
+  const { data: jobTargets } = useJobTargets()
   const updateClaim = useUpdateClaim()
 
   const [expanded, setExpanded] = useState<string | null>(null)
   const [filter, setFilter] = useState<string>("")
+  const [showJobTargetSelector, setShowJobTargetSelector] = useState(false)
 
   if (isLoading) {
     return <div style={{ padding: "2rem", textAlign: "center", color: "#64748b" }}>加载中...</div>
@@ -76,7 +80,125 @@ export default function ResumeClaimsPage() {
         <span style={{ fontSize: "0.85rem", color: "#64748b" }}>
           {claims.length} 条主张
         </span>
+        <div style={{ marginLeft: "auto", display: "flex", gap: "0.6rem" }}>
+          <button
+            onClick={() => navigate(`/app/resumes/${resumeId}/ability-profile`)}
+            style={{
+              padding: "0.5rem 1rem",
+              backgroundColor: "transparent",
+              color: "#334155",
+              border: "1px solid #cbd5e1",
+              borderRadius: "6px",
+              fontSize: "0.85rem",
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            能力档案
+          </button>
+          <button
+            onClick={() => navigate(`/app/resumes/${resumeId}/training-plan`)}
+            style={{
+              padding: "0.5rem 1rem",
+              backgroundColor: "transparent",
+              color: "#334155",
+              border: "1px solid #cbd5e1",
+              borderRadius: "6px",
+              fontSize: "0.85rem",
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            训练计划
+          </button>
+          <button
+            onClick={() => setShowJobTargetSelector(!showJobTargetSelector)}
+            style={{
+              padding: "0.5rem 1rem",
+              backgroundColor: "#7c3aed",
+              color: "#ffffff",
+              border: "none",
+              borderRadius: "6px",
+              fontSize: "0.85rem",
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            分析能力缺口
+          </button>
+        </div>
       </div>
+
+      {/* Job Target Selector */}
+      {showJobTargetSelector && (
+        <div style={{
+          backgroundColor: "#fff",
+          borderRadius: "8px",
+          border: "1px solid #e2e8f0",
+          padding: "1rem",
+          marginBottom: "1rem",
+        }}>
+          <h3 style={{ fontSize: "0.95rem", fontWeight: 600, marginBottom: "0.75rem" }}>
+            选择目标岗位
+          </h3>
+          {!jobTargets || jobTargets.length === 0 ? (
+            <div style={{ padding: "1rem", textAlign: "center", color: "#64748b" }}>
+              <p style={{ marginBottom: "0.5rem" }}>暂无目标岗位</p>
+              <Link
+                to="/app/job-targets/create"
+                style={{
+                  color: "#7c3aed",
+                  textDecoration: "none",
+                  fontWeight: 600,
+                }}
+              >
+                创建新岗位 →
+              </Link>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+              {jobTargets.map((jobTarget: JobTarget) => (
+                <Link
+                  key={jobTarget.job_target_id}
+                  to={`/app/claim-gap/${resumeId}/${jobTarget.job_target_id}`}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "0.75rem 1rem",
+                    backgroundColor: "#f9fafb",
+                    borderRadius: "6px",
+                    border: "1px solid #e5e7eb",
+                    textDecoration: "none",
+                    color: "inherit",
+                    transition: "all 0.2s",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = "#f3f4f6"
+                    e.currentTarget.style.borderColor = "#d1d5db"
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = "#f9fafb"
+                    e.currentTarget.style.borderColor = "#e5e7eb"
+                  }}
+                >
+                  <div>
+                    <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>
+                      {jobTarget.title}
+                    </div>
+                    <div style={{ fontSize: "0.75rem", color: "#6b7280" }}>
+                      {jobTarget.requirements.length} 个能力需求
+                    </div>
+                  </div>
+                  <div style={{ color: "#7c3aed", fontSize: "0.85rem", fontWeight: 600 }}>
+                    开始分析 →
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Empty state */}
       {claims.length === 0 && (

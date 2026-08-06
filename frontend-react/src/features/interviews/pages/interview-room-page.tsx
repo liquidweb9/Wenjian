@@ -6,6 +6,8 @@ import { useInterviewStream } from "../hooks/use-interview-stream"
 import { useFinishInterview, useInterview, useSubmitAnswer } from "../hooks/use-interviews"
 import { useInterviewDraftStore } from "@/stores/interview-draft-store"
 import { usePageTitle } from "@/lib/use-page-title"
+import { useAnswerVersions } from "@/features/answer-diff/hooks/use-answer-diff"
+import AnswerDiffViewer from "@/features/answer-diff/components/answer-diff-viewer"
 import type { ConnectionState, InterviewStage } from "../runtime/event-schema"
 
 const stageMessages: Record<InterviewStage, string> = {
@@ -304,7 +306,7 @@ export default function InterviewRoomPage() {
           <div>
             <div className="app-eyebrow">Interview Context</div>
             <h2 style={{ margin: "0.45rem 0 0", fontSize: "1rem", fontWeight: 600, color: "var(--wj-text-primary)" }}>
-              当前面试进度
+              面试上下文
             </h2>
             <p style={{ margin: "0.45rem 0 0", color: "var(--wj-text-secondary)", fontSize: "0.84rem", lineHeight: 1.65 }}>
               {stageMessages[stage]}
@@ -312,11 +314,31 @@ export default function InterviewRoomPage() {
           </div>
 
           <div className="app-muted-surface" style={{ padding: "0.9rem 1rem" }}>
+            <StatusRow label="目标岗位" value={interview?.target_role || "未指定"} />
             <StatusRow label="面试模式" value={interview?.mode === "practice" ? "练习模式" : "模拟面试"} />
+            <StatusRow label="进度" value={`第 ${currentTurn} / ${interview?.max_turns ?? "?"} 题`} />
             <StatusRow label="连接状态" value={connectionLabels[runtime.connection]} />
-            <StatusRow label="当前阶段" value={stageMessages[stage]} />
-            <StatusRow label="事件序号" value={String(runtime.lastSequence)} />
           </div>
+
+          {runtime.currentQuestion ? (
+            <div className="app-muted-surface" style={{ padding: "0.9rem 1rem" }}>
+              <h3 style={{ margin: 0, fontSize: "0.88rem", fontWeight: 600, color: "var(--wj-text-primary)", marginBottom: "0.6rem" }}>
+                当前验证目标
+              </h3>
+              <StatusRow
+                label="问题类型"
+                value={(runtime.currentQuestion.question_form as string) || "概念理解"}
+              />
+              <StatusRow
+                label="验证点"
+                value={(runtime.currentQuestion.verification_point as string) || "简历陈述一致性"}
+              />
+              <StatusRow
+                label="考察深度"
+                value={`L${(runtime.currentQuestion.target_depth as number) || currentTurn}`}
+              />
+            </div>
+          ) : null}
 
           <div>
             <h3 style={{ margin: 0, fontSize: "0.9rem", color: "var(--wj-text-primary)" }}>问答记录</h3>
@@ -363,7 +385,12 @@ export default function InterviewRoomPage() {
 
         <main className="app-surface" style={{ padding: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}>
           {selectedHistoryIdx != null && history[selectedHistoryIdx] ? (
-            <HistoryDetail entry={history[selectedHistoryIdx]!} index={selectedHistoryIdx} onBack={() => setSelectedHistoryIdx(null)} />
+            <HistoryDetail
+              interviewId={interviewId!}
+              entry={history[selectedHistoryIdx]!}
+              index={selectedHistoryIdx}
+              onBack={() => setSelectedHistoryIdx(null)}
+            />
           ) : null}
 
           {selectedHistoryIdx == null && isTransitioning ? (
@@ -377,8 +404,54 @@ export default function InterviewRoomPage() {
           {selectedHistoryIdx == null && (stage === "answering" || stage === "submitting") && currentQuestionText && !isRecoveringSubmission ? (
             <>
               <section style={{ padding: "1.4rem 1.5rem 1rem", borderBottom: "1px solid var(--wj-border-subtle)" }}>
-                <div className="app-eyebrow">Current Question</div>
-                <h1 style={{ margin: "0.55rem 0 0", fontSize: "1.55rem", lineHeight: 1.45, fontWeight: 600, color: "var(--wj-text-primary)" }}>
+                <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap", marginBottom: "0.5rem" }}>
+                  <div className="app-eyebrow">Current Question</div>
+                  {runtime.currentQuestion?.question_form ? (
+                    <span
+                      style={{
+                        padding: "0.2rem 0.6rem",
+                        borderRadius: 999,
+                        background: "var(--wj-brand-accent-bg)",
+                        color: "var(--wj-brand-secondary)",
+                        fontSize: "0.72rem",
+                        fontWeight: 700,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.03em",
+                      }}
+                    >
+                      {formatQuestionForm(runtime.currentQuestion.question_form as string)}
+                    </span>
+                  ) : null}
+                  {runtime.currentQuestion?.is_clarification ? (
+                    <span
+                      style={{
+                        padding: "0.2rem 0.6rem",
+                        borderRadius: 999,
+                        background: "var(--wj-warning-bg)",
+                        color: "var(--wj-warning)",
+                        fontSize: "0.72rem",
+                        fontWeight: 700,
+                      }}
+                    >
+                      澄清模式
+                    </span>
+                  ) : null}
+                  {runtime.currentQuestion?.is_counterfactual ? (
+                    <span
+                      style={{
+                        padding: "0.2rem 0.6rem",
+                        borderRadius: 999,
+                        background: "var(--wj-info-bg)",
+                        color: "var(--wj-info)",
+                        fontSize: "0.72rem",
+                        fontWeight: 700,
+                      }}
+                    >
+                      反事实
+                    </span>
+                  ) : null}
+                </div>
+                <h1 style={{ margin: "0.35rem 0 0", fontSize: "1.55rem", lineHeight: 1.45, fontWeight: 600, color: "var(--wj-text-primary)" }}>
                   {currentQuestionText}
                 </h1>
                 <p style={{ margin: "0.65rem 0 0", color: "var(--wj-text-secondary)", lineHeight: 1.7 }}>
@@ -524,33 +597,17 @@ export default function InterviewRoomPage() {
             <StatusRow label="目标岗位" value={interview?.target_role || "未指定"} />
           </div>
 
-          <Panel title="当前问题来源">
-            <p style={{ margin: 0, color: "var(--wj-text-secondary)", lineHeight: 1.7, fontSize: "0.85rem" }}>
-              {currentQuestionText
-                ? "当前问题会结合你的简历内容与上一轮回答动态推进。完成作答后，问鉴会继续追问更值得澄清的经历细节。"
-                : "问题生成完成后，这里会说明当前回合的上下文。"}
-            </p>
-          </Panel>
-
-          <Panel title="如何决定下一步">
+          <Panel title="追问策略">
             <p style={{ margin: 0, color: "var(--wj-text-secondary)", lineHeight: 1.7, fontSize: "0.85rem" }}>
               信息不足、实现细节偏浅或存在矛盾时会继续深挖；当前项目证据已充分、达到该项目追问上限，或其他项目优先级更高时会切换项目。总轮次只是上限，不是固定脚本。
             </p>
           </Panel>
 
-          <Panel title="离开页面会怎样">
+          <Panel title="草稿与恢复">
             <p style={{ margin: 0, color: "var(--wj-text-secondary)", lineHeight: 1.7, fontSize: "0.85rem" }}>
               草稿按题保存。刷新或退出重进后会从服务端恢复当前问题与历史记录；分析仍在服务端继续，页面会通过实时连接和轮询补回结果，请勿重复提交同一题。
             </p>
           </Panel>
-
-          {runtime.currentQuestion ? (
-            <Panel title="问题快照">
-              <div style={{ color: "var(--wj-text-primary)", fontSize: "0.88rem", lineHeight: 1.7 }}>
-                {runtime.currentQuestion.question_text as string}
-              </div>
-            </Panel>
-          ) : null}
         </aside>
       </div>
     </div>
@@ -574,7 +631,20 @@ function Panel({
   )
 }
 
-function HistoryDetail({ entry, index, onBack }: { entry: HistoryEntry; index: number; onBack: () => void }) {
+function HistoryDetail({
+  interviewId,
+  entry,
+  index,
+  onBack,
+}: {
+  interviewId: string
+  entry: HistoryEntry
+  index: number
+  onBack: () => void
+}) {
+  const { data: versionsData } = useAnswerVersions(interviewId, entry.questionId)
+  const versions = versionsData?.versions ?? []
+
   return (
     <div style={{ padding: "1.5rem", overflow: "auto", flex: 1 }}>
       <button type="button" className="btn-secondary" onClick={onBack}>
@@ -590,6 +660,11 @@ function HistoryDetail({ entry, index, onBack }: { entry: HistoryEntry; index: n
             {entry.a || "本题尚未记录回答。"}
           </p>
         </Panel>
+        {versions.length >= 2 ? (
+          <Panel title="版本对比">
+            <AnswerDiffViewer versions={versions} />
+          </Panel>
+        ) : null}
         {entry.evaluation ? (
           <Panel title="评分结果">
             <ScoreDisplay evaluation={entry.evaluation} />
@@ -844,4 +919,16 @@ const dimensionLabels: Record<string, string> = {
 
 function dimensionLabel(name: string) {
   return dimensionLabels[name] ?? name
+}
+
+function formatQuestionForm(form: string): string {
+  const formLabels: Record<string, string> = {
+    concept: "概念理解",
+    project_detail: "项目细节",
+    debugging: "调试追踪",
+    tradeoff: "权衡决策",
+    counterfactual: "反事实",
+    clarification: "澄清",
+  }
+  return formLabels[form] || form
 }

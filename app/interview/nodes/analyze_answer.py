@@ -1,23 +1,23 @@
 """Analyze candidate answer using LLM."""
 
-from app.interview.state import InterviewState
 from app.interview.schemas import AnswerAnalysis
+from app.interview.state import InterviewState
 from app.llm.agnes_api import AgnesGateway
 from app.llm.model_router import get_tier
 from app.observability.logging import logger
 
-ANALYZER_PROMPT = """You are an interview answer analyzer. Analyze the candidate's answer to a technical question.
+ANALYZER_PROMPT = """你是一位面试回答分析器，负责分析候选人针对技术问题的回答。
 
-Focus on:
-1. What claims does the candidate make in their answer?
-2. What technical points do they mention?
-3. Do they show personal contribution vs. vague team statements?
-4. Which expected points did they address, partially address, or miss?
-5. Are there vague statements, possible errors, or contradictions?
-6. How relevant and information-dense is the answer?
-7. What would be a good follow-up target?
+重点关注：
+1. 候选人在回答中提出了哪些主张？
+2. 他们提到了哪些技术要点？
+3. 回答是否体现了个人贡献，而非模糊的团队表述？
+4. 哪些预期要点被覆盖、部分覆盖或遗漏？
+5. 是否存在模糊表述、可能的错误或矛盾？
+6. 回答的相关性与信息密度如何？
+7. 合适的追问目标是什么？
 
-Be objective. Do not inflate or penalize based on language fluency."""
+保持客观，不要因语言流畅度而加分或扣分。所有自然语言内容请使用简体中文。"""
 
 
 async def analyze_answer_node(state: InterviewState) -> dict:

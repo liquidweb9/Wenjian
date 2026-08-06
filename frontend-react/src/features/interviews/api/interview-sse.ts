@@ -1,3 +1,5 @@
+import { getAuthToken } from "@/lib/api-client"
+
 export type SSECallback = (event: Record<string, unknown>) => void
 
 export function createSSEConnection(
@@ -16,8 +18,11 @@ export function createSSEConnection(
     onConnectionChange(retries === 0 ? "connecting" : "reconnecting")
 
     try {
+      const headers: Record<string, string> = { Accept: "text/event-stream" }
+      const token = getAuthToken()
+      if (token) headers.Authorization = `Bearer ${token}`
       const response = await fetch(`/api/v1/interviews/${interviewId}/events`, {
-        headers: { Accept: "text/event-stream" },
+        headers,
         signal,
       })
 

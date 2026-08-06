@@ -8,8 +8,7 @@ from typing import Protocol
 
 from pydantic import BaseModel, Field
 
-from app.competencies import get_competency_by_code, get_all_competency_codes
-
+from app.competencies import get_all_competency_codes, get_competency_by_code
 
 # ============================================================
 # Schemas
@@ -62,7 +61,8 @@ class LLMGateway(Protocol):
     async def generate_structured(
         self,
         task_name: str,
-        prompt: str,
+        system_prompt: str,
+        user_payload: dict,
         output_model: type[BaseModel],
         **kwargs
     ) -> BaseModel:
@@ -144,7 +144,8 @@ JD 文本：
         try:
             result = await self.llm.generate_structured(
                 task_name="jd_parse",
-                prompt=prompt,
+                system_prompt=prompt,
+                user_payload={"jd_text": jd_text},
                 output_model=JDParseResult,
                 temperature=0.3,  # Low temperature for more consistent extraction
             )
@@ -204,7 +205,8 @@ class MockLLMGateway:
     async def generate_structured(
         self,
         task_name: str,
-        prompt: str,
+        system_prompt: str,
+        user_payload: dict,
         output_model: type[BaseModel],
         **kwargs
     ) -> BaseModel:

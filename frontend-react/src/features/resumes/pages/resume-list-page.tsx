@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { Link, useSearchParams } from "react-router-dom"
-import { ArrowRight, FileText, Plus } from "lucide-react"
+import { Plus } from "lucide-react"
 import { useResumeList, useDeleteResume } from "../hooks/use-resumes"
 import { ApiError } from "@/lib/api-client"
 import { getResumeErrorMessage } from "../utils/error-mapping"

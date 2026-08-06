@@ -3,15 +3,15 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.ids import new_id
+from app.core.deps import get_current_user
 from app.persistence.database import get_session
-from app.persistence.models import JobTarget, JobRequirement, ResumeClaim
+from app.persistence.models import JobTarget, ResumeClaim, ResumeSource, User
 from app.planning import (
-    ClaimMapper,
     ClaimGapAnalyzer,
+    ClaimMapper,
     InterviewPlanBuilder,
 )
 
@@ -102,27 +102,44 @@ class ClaimGapResponse(BaseModel):
 @router.post("", response_model=ClaimGapResponse)
 async def analyze_claim_gap(
     data: ClaimGapRequest,
+    user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_session)],
 ):
     """Analyze claim gap between resume and job target.
 
     Args:
         data: Resume ID and job target ID
+        user: Authenticated user
         db: Database session
 
     Returns:
         Claim gap analysis with interview plan
 
     Raises:
-        HTTPException: 404 if resume or job target not found
+        HTTPException: 404 if resume or job target not found or not owned by user
     """
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
 
-    # 1. Fetch job target with requirements
+    # 1. Verify resume ownership
+    stmt = select(ResumeSource).where(
+        ResumeSource.resume_id == data.resume_id,
+        ResumeSource.user_id == user.user_id,
+    )
+    resume = (await db.execute(stmt)).scalar_one_or_none()
+    if not resume:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Resume {data.resume_id} not found",
+        )
+
+    # 2. Fetch job target with requirements (ownership checked)
     stmt = (
         select(JobTarget)
-        .where(JobTarget.job_target_id == data.job_target_id)
+        .where(
+            JobTarget.job_target_id == data.job_target_id,
+            JobTarget.user_id == user.user_id,
+        )
         .options(selectinload(JobTarget.requirements))
     )
     result = await db.execute(stmt)
@@ -134,16 +151,10 @@ async def analyze_claim_gap(
             detail=f"Job target {data.job_target_id} not found",
         )
 
-    # 2. Fetch resume claims
+    # 3. Fetch resume claims (may be empty — analyzer marks all requirements uncovered)
     stmt = select(ResumeClaim).where(ResumeClaim.resume_id == data.resume_id)
     result = await db.execute(stmt)
     claims = result.scalars().all()
-
-    if not claims:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No claims found for resume {data.resume_id}",
-        )
 
     # 3. Prepare requirements for mapping
     requirements = [
@@ -162,7 +173,7 @@ async def analyze_claim_gap(
     claim_mappings = [
         mapper.map_claim(
             claim_id=claim.claim_id,
-            claim_text=claim.text,
+            claim_text=claim.data.get("claim_text", ""),
             requirements=requirements,
         )
         for claim in claims
@@ -231,6 +242,7 @@ async def analyze_claim_gap(
 async def get_claim_gap(
     resume_id: str,
     job_target_id: str,
+    user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_session)],
 ):
     """Get claim gap analysis (same as POST but via GET for caching).
@@ -238,6 +250,7 @@ async def get_claim_gap(
     Args:
         resume_id: Resume ID
         job_target_id: Job target ID
+        user: Authenticated user
         db: Database session
 
     Returns:
@@ -245,4 +258,4 @@ async def get_claim_gap(
     """
     # Reuse the POST endpoint logic
     request = ClaimGapRequest(resume_id=resume_id, job_target_id=job_target_id)
-    return await analyze_claim_gap(request, db)
+    return await analyze_claim_gap(request, user, db)

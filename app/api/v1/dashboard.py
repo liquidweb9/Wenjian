@@ -1,53 +1,72 @@
 """Dashboard aggregation endpoint."""
 
+from typing import Annotated
+
 from fastapi import APIRouter, Depends
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.deps import get_current_user
 from app.persistence.database import get_session
 from app.persistence.models import (
-    ResumeSource, ResumeRevision, Interview, InterviewReport,
+    Interview,
+    InterviewReport,
+    ResumeRevision,
+    ResumeSource,
+    User,
 )
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 
 @router.get("/summary")
-async def get_dashboard_summary(session: AsyncSession = Depends(get_session)):
-    """Aggregated stats for the dashboard landing page."""
+async def get_dashboard_summary(
+    session: Annotated[AsyncSession, Depends(get_session)],
+    user: Annotated[User, Depends(get_current_user)],
+):
+    """Aggregated stats for the dashboard landing page (scoped to the current user)."""
 
     total_resumes_r = await session.execute(
-        select(func.count(ResumeSource.resume_id))
+        select(func.count(ResumeSource.resume_id)).where(
+            ResumeSource.user_id == user.user_id
+        )
     )
     total_resumes = total_resumes_r.scalar() or 0
 
     pending_r = await session.execute(
-        select(func.count(ResumeRevision.revision_id)).where(
-            ResumeRevision.status == "PARSED_UNCONFIRMED"
+        select(func.count(ResumeRevision.revision_id))
+        .join(ResumeSource, ResumeSource.resume_id == ResumeRevision.resume_id)
+        .where(
+            ResumeRevision.status == "PARSED_UNCONFIRMED",
+            ResumeSource.user_id == user.user_id,
         )
     )
     pending_reviews = pending_r.scalar() or 0
 
     total_interviews_r = await session.execute(
-        select(func.count(Interview.interview_id))
+        select(func.count(Interview.interview_id)).where(
+            Interview.user_id == user.user_id
+        )
     )
     total_interviews = total_interviews_r.scalar() or 0
 
     completed_r = await session.execute(
         select(func.count(Interview.interview_id)).where(
-            Interview.status == "finished"
+            Interview.status == "finished",
+            Interview.user_id == user.user_id,
         )
     )
     completed_interviews = completed_r.scalar() or 0
 
     in_progress_r = await session.execute(
         select(func.count(Interview.interview_id)).where(
-            Interview.status == "in_progress"
+            Interview.status == "in_progress",
+            Interview.user_id == user.user_id,
         )
     )
     in_progress_count = in_progress_r.scalar() or 0
 
-    # Recent resumes (last 5)
+    # Recent resumes (last 5, current user only)
     recent_resumes_r = await session.execute(
         select(
             ResumeSource.resume_id,
@@ -57,6 +76,7 @@ async def get_dashboard_summary(session: AsyncSession = Depends(get_session)):
             ResumeRevision.status,
         )
         .join(ResumeRevision, ResumeRevision.resume_id == ResumeSource.resume_id)
+        .where(ResumeSource.user_id == user.user_id)
         .order_by(ResumeSource.created_at.desc())
         .limit(5)
     )
@@ -82,7 +102,10 @@ async def get_dashboard_summary(session: AsyncSession = Depends(get_session)):
             Interview.max_turns,
             Interview.created_at,
         )
-        .where(Interview.status == "in_progress")
+        .where(
+            Interview.status == "in_progress",
+            Interview.user_id == user.user_id,
+        )
         .order_by(Interview.created_at.desc())
         .limit(5)
     )
@@ -102,7 +125,10 @@ async def get_dashboard_summary(session: AsyncSession = Depends(get_session)):
     # Average score from reports (best-effort — scores live in nested JSON)
     avg_score = None
     reports_r = await session.execute(
-        select(InterviewReport.data).limit(100)
+        select(InterviewReport.data)
+        .join(Interview, Interview.interview_id == InterviewReport.interview_id)
+        .where(Interview.user_id == user.user_id)
+        .limit(100)
     )
     scores = []
     for (data,) in reports_r.all():

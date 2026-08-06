@@ -1,13 +1,16 @@
 import datetime
-from sqlalchemy import String, Text, Float, Integer, DateTime, ForeignKey, JSON, Enum as SAEnum, Boolean
+
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.persistence.database import Base
 from app.core.enums import (
-    ResumeStatus, SourceType, ExtractionMethod, BlockType,
-    ClaimType, ExpectedLevel, VerificationCategory, ClaimStatusEnum,
+    BlockType,
+    ExtractionMethod,
+    ResumeStatus,
+    SourceType,
 )
-
+from app.persistence.database import Base
 
 # ============================================================
 # Phase 2 M2.6: User Authentication
@@ -44,7 +47,9 @@ class ResumeSource(Base):
     file_size: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow)
 
-    revisions: Mapped[list["ResumeRevision"]] = relationship(back_populates="source")
+    revisions: Mapped[list["ResumeRevision"]] = relationship(
+        back_populates="source", cascade="all, delete-orphan"
+    )
 
 
 class ResumeRevision(Base):
@@ -115,6 +120,11 @@ class Interview(Base):
     user_id: Mapped[str] = mapped_column(String(64), ForeignKey("users.user_id"), index=True)
     thread_id: Mapped[str] = mapped_column(String(64), unique=True)
     resume_id: Mapped[str] = mapped_column(String(64), ForeignKey("resume_sources.resume_id"))
+    job_target_id: Mapped[str | None] = mapped_column(
+        String(64),
+        ForeignKey("job_targets.job_target_id", ondelete="SET NULL"),
+        nullable=True,
+    )
     target_role: Mapped[str] = mapped_column(String(256))
     job_description: Mapped[str | None] = mapped_column(Text)
     mode: Mapped[str] = mapped_column(String(32), default="simulation")
@@ -123,8 +133,12 @@ class Interview(Base):
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow)
     finished_at: Mapped[datetime.datetime | None] = mapped_column(DateTime, nullable=True)
 
-    questions: Mapped[list["InterviewQuestion"]] = relationship(back_populates="interview")
-    answers: Mapped[list["InterviewAnswer"]] = relationship(back_populates="interview")
+    questions: Mapped[list["InterviewQuestion"]] = relationship(
+        back_populates="interview", cascade="all, delete-orphan"
+    )
+    answers: Mapped[list["InterviewAnswer"]] = relationship(
+        back_populates="interview", cascade="all, delete-orphan"
+    )
 
 
 class InterviewQuestion(Base):
@@ -132,7 +146,7 @@ class InterviewQuestion(Base):
 
     question_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     interview_id: Mapped[str] = mapped_column(String(64), ForeignKey("interviews.interview_id"))
-    question_text: Mapped[str] = mapped_column(Text)
+    data: Mapped[dict] = mapped_column(JSON)  # Full question object from graph state
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow)
 
     interview: Mapped["Interview"] = relationship(back_populates="questions")
@@ -145,6 +159,8 @@ class InterviewAnswer(Base):
     interview_id: Mapped[str] = mapped_column(String(64), ForeignKey("interviews.interview_id"))
     question_id: Mapped[str] = mapped_column(String(64), ForeignKey("interview_questions.question_id"))
     answer_text: Mapped[str] = mapped_column(Text)
+    analysis: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    evaluation: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow)
 
     interview: Mapped["Interview"] = relationship(back_populates="answers")
@@ -218,6 +234,7 @@ class JobTarget(Base):
     user_id: Mapped[str | None] = mapped_column(String(64), ForeignKey("users.user_id"), index=True)
     title: Mapped[str] = mapped_column(String(256))
     company_name: Mapped[str | None] = mapped_column(String(256))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
     level: Mapped[str] = mapped_column(String(32))  # intern, junior, mid, senior, staff, custom
     interview_round: Mapped[str] = mapped_column(String(32))  # resume, project, technical, system_design, hr, custom
     source: Mapped[str] = mapped_column(String(32))  # template, pasted_jd, manual
@@ -226,13 +243,22 @@ class JobTarget(Base):
     is_template: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow)
 
+    requirements: Mapped[list["JobRequirement"]] = relationship(
+        back_populates="job_target", cascade="all, delete-orphan"
+    )
+
 
 class JobRequirement(Base):
     """Structured requirements extracted from JD or template."""
     __tablename__ = "job_requirements"
 
     requirement_id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    job_target_id: Mapped[str] = mapped_column(String(64), ForeignKey("job_targets.job_target_id"))
+    job_target_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("job_targets.job_target_id", ondelete="CASCADE"),
+    )
+
+    job_target: Mapped["JobTarget"] = relationship(back_populates="requirements")
     competency_code: Mapped[str] = mapped_column(String(128))  # Links to Competency.code
     title: Mapped[str] = mapped_column(String(256))
     description: Mapped[str] = mapped_column(Text)
@@ -304,12 +330,10 @@ class Evidence(Base):
     interview_id: Mapped[str] = mapped_column(String(64), ForeignKey("interviews.interview_id"))
     answer_id: Mapped[str] = mapped_column(String(64), ForeignKey("interview_answers.answer_id"), index=True)
     evidence_type: Mapped[str] = mapped_column(String(50))  # DIRECT/INDIRECT/CONTEXTUAL
-    span_start: Mapped[int | None] = mapped_column(Integer)
-    span_end: Mapped[int | None] = mapped_column(Integer)
-    span_text: Mapped[str | None] = mapped_column(Text)
-    span_hash: Mapped[str | None] = mapped_column(String(64))  # SHA256 for integrity check
-    strength: Mapped[float] = mapped_column(Float)  # 0.0-1.0
-    extraction_prompt_version: Mapped[str | None] = mapped_column(String(32))
+    spans: Mapped[list | None] = mapped_column(JSON, nullable=True)  # [{start, end, text, quote_hash}]
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    extracted_by: Mapped[str | None] = mapped_column(String(50), nullable=True)  # MODEL/ANALYST
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)  # 0.0-1.0
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow)
 
 
@@ -321,11 +345,14 @@ class EvidenceTransition(Base):
     verification_point_id: Mapped[str] = mapped_column(String(64), ForeignKey("verification_points.verification_point_id"), index=True)
     from_state: Mapped[str] = mapped_column(String(50))
     to_state: Mapped[str] = mapped_column(String(50))
-    trigger: Mapped[str] = mapped_column(String(50))  # ANSWER_SUBMITTED, EVIDENCE_EXTRACTED, etc
+    reason_code: Mapped[str | None] = mapped_column(String(50))  # FIRST_INQUIRY, EVIDENCE_SPANS_FOUND, etc
     interview_id: Mapped[str | None] = mapped_column(String(64), ForeignKey("interviews.interview_id"))
     answer_id: Mapped[str | None] = mapped_column(String(64), ForeignKey("interview_answers.answer_id"))
-    reason: Mapped[str | None] = mapped_column(Text)
-    transition_metadata: Mapped[dict | None] = mapped_column("metadata", JSON)
+    evidence_spans: Mapped[list | None] = mapped_column(JSON, nullable=True)  # Snapshot of extracted spans
+    policy_version: Mapped[str | None] = mapped_column(String(32))
+    prompt_version: Mapped[str | None] = mapped_column(String(32))
+    model_name: Mapped[str | None] = mapped_column(String(128))
+    evaluation_id: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow)
 
 
@@ -337,12 +364,13 @@ class Contradiction(Base):
     verification_point_id: Mapped[str] = mapped_column(String(64), ForeignKey("verification_points.verification_point_id"), index=True)
     interview_id: Mapped[str] = mapped_column(String(64), ForeignKey("interviews.interview_id"))
     claim_id: Mapped[str] = mapped_column(String(64), ForeignKey("resume_claims.claim_id"))
-    answer_id: Mapped[str] = mapped_column(String(64), ForeignKey("interview_answers.answer_id"))
-    contradiction_type: Mapped[str] = mapped_column(String(50))  # INTERNAL, CLAIM_MISMATCH, etc
+    contradiction_type: Mapped[str] = mapped_column(String(50))  # FACTUAL/TIMELINE/ROLE/SCOPE
+    severity: Mapped[str | None] = mapped_column(String(20))  # LOW/MEDIUM/HIGH
     description: Mapped[str] = mapped_column(Text)
+    clarification_question: Mapped[str | None] = mapped_column(Text)
+    conflicting_answers: Mapped[list | None] = mapped_column(JSON, nullable=True)  # [{answer_id, text}]
     resolution_status: Mapped[str] = mapped_column(String(50), default="UNRESOLVED", index=True)
-    resolution_notes: Mapped[str | None] = mapped_column(Text)
-    clarifying_question_id: Mapped[str | None] = mapped_column(String(64))
+    resolution_answer_id: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow)
     resolved_at: Mapped[datetime.datetime | None] = mapped_column(DateTime, nullable=True)
 

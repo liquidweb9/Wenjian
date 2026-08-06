@@ -13,6 +13,17 @@ export class ApiError extends Error {
   }
 }
 
+export function getAuthToken(): string | null {
+  const authStorage = localStorage.getItem("auth-storage")
+  if (!authStorage) return null
+  try {
+    const { state } = JSON.parse(authStorage)
+    return state?.token ?? null
+  } catch {
+    return null
+  }
+}
+
 export const api = axios.create({
   baseURL: "/api/v1",
   // Ordinary reads should fail fast. Long-running interview mutations override
@@ -21,10 +32,16 @@ export const api = axios.create({
   headers: { "Content-Type": "application/json" },
 })
 
-// Request interceptor: inject request ID, auth placeholder
+// Request interceptor: inject request ID and auth token
 api.interceptors.request.use((config) => {
   config.headers.set("X-Request-ID", crypto.randomUUID().slice(0, 12))
-  // Auth placeholder — inject token here when auth is implemented
+
+  // Inject auth token from localStorage if available
+  const token = getAuthToken()
+  if (token) {
+    config.headers.set("Authorization", `Bearer ${token}`)
+  }
+
   return config
 })
 
