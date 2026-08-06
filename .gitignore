@@ -83,3 +83,9 @@ Desktop.ini
 # Local screenshots and diagnostic helpers
 prom/
 _check_db.py
+
+# Tool / test artifacts
+.codegraph/
+.playwright-mcp/
+playwright-report/
+test-results/
