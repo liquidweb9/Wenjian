@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -23,6 +24,7 @@ from app.persistence.models import (
     InterviewAnswer,
     InterviewQuestion,
     InterviewReport,
+    JobTarget,
     ResumeBlock,
     ResumeRevision,
     ResumeSource,
@@ -35,6 +37,7 @@ from app.persistence.models import (
     ResumeProfile as DBProfile,
 )
 from app.resume.claim_selection import select_core_claims
+from app.resume.schemas import ResumeProfile
 from app.resume.service import ResumeService
 
 router = APIRouter(prefix="/resumes", tags=["resumes"])
@@ -53,6 +56,19 @@ async def _resume_owned_by(
     return result.scalar_one_or_none()
 
 
+async def _job_target_owned_by(
+    session: AsyncSession, job_target_id: str, user_id: str
+) -> JobTarget | None:
+    """Fetch a job target only if it belongs to the given user (else None)."""
+    result = await session.execute(
+        select(JobTarget).where(
+            JobTarget.job_target_id == job_target_id,
+            JobTarget.user_id == user_id,
+        )
+    )
+    return result.scalar_one_or_none()
+
+
 class TextUploadRequest(BaseModel):
     file_name: str
     text: str
@@ -60,6 +76,11 @@ class TextUploadRequest(BaseModel):
 
 class RevisionUpdateRequest(BaseModel):
     normalized_text: str
+
+
+class TargetRoleUpdateRequest(BaseModel):
+    target_role: str = ""
+    job_target_id: str | None = None
 
 
 class ConfirmResponse(BaseModel):
@@ -174,6 +195,8 @@ async def list_resumes(
             ResumeSource.created_at,
             latest_cte.c.status,
             latest_cte.c.revision_id,
+            ResumeSource.job_target_id,
+            ResumeSource.target_role,
         )
         .join(latest_cte, ResumeSource.resume_id == latest_cte.c.resume_id)
         .where(ResumeSource.user_id == user.user_id)
@@ -211,6 +234,8 @@ async def list_resumes(
             "created_at": row[3].isoformat() if row[3] else None,
             "status": row[4].value if hasattr(row[4], "value") else str(row[4]) if row[4] else None,
             "latest_revision_id": row[5],
+            "job_target_id": row[6],
+            "target_role": row[7],
         }
         for row in rows
     ]
@@ -325,6 +350,14 @@ async def get_resume(
         if profile_row:
             profile_data = profile_row.data
 
+    job_target_title = None
+    if source.job_target_id:
+        jt_result = await session.execute(
+            select(JobTarget).where(JobTarget.job_target_id == source.job_target_id)
+        )
+        jt = jt_result.scalar_one_or_none()
+        job_target_title = jt.title if jt else None
+
     return {
         "resume_id": source.resume_id,
         "file_name": source.file_name,
@@ -339,6 +372,9 @@ async def get_resume(
         "extraction_method": rev.extraction_method if rev else None,
         "parser_name": rev.parser_name if rev else None,
         "parser_version": rev.parser_version if rev else None,
+        "target_role": source.target_role,
+        "job_target_id": source.job_target_id,
+        "job_target_title": job_target_title,
         "profile": profile_data,
         "created_at": source.created_at.isoformat() if source.created_at else None,
     }
@@ -477,12 +513,19 @@ async def confirm_revision(
     resume_id: str,
     revision_id: str,
     target_role: str = "",
+    job_target_id: str | None = None,
     session: AsyncSession = Depends(get_session),
     user: Annotated[User, Depends(get_current_user)] = ...,
 ):
     """Confirm a parsed revision and generate profile + claims."""
-    if not await _resume_owned_by(session, resume_id, user.user_id):
+    source = await _resume_owned_by(session, resume_id, user.user_id)
+    if not source:
         raise HTTPException(status_code=404, detail="Resume not found")
+    if job_target_id:
+        job_target = await _job_target_owned_by(session, job_target_id, user.user_id)
+        if not job_target:
+            raise HTTPException(status_code=404, detail="Job target not found")
+        target_role = job_target.title
     result = await session.execute(
         select(ResumeRevision).options(
             selectinload(ResumeRevision.blocks),
@@ -556,16 +599,28 @@ async def confirm_revision(
                 detail="Resume parsing service is temporarily unavailable; please retry.",
             )
 
-    # Save profile
-    db_profile = DBProfile(
-        profile_id=profile.resume_id + "_profile",
+    # Save profile — idempotent upsert so concurrent confirm/retry requests
+    # never race on the deterministic "{resume_id}_profile" primary key.
+    profile_id = profile.resume_id + "_profile"
+    profile_data = profile.model_dump(mode="json")
+    profile_upsert = pg_insert(DBProfile).values(
+        profile_id=profile_id,
         resume_id=resume_id,
         revision_id=revision_id,
-        data=profile.model_dump(mode="json"),
+        data=profile_data,
         confidence=profile.extraction_confidence,
         warnings=profile.warnings,
     )
-    await session.merge(db_profile)
+    profile_upsert = profile_upsert.on_conflict_do_update(
+        index_elements=[DBProfile.profile_id],
+        set_={
+            "revision_id": profile_upsert.excluded.revision_id,
+            "data": profile_upsert.excluded.data,
+            "confidence": profile_upsert.excluded.confidence,
+            "warnings": profile_upsert.excluded.warnings,
+        },
+    )
+    await session.execute(profile_upsert)
 
     # Extract claims
     claims = await service.extract_claims(profile, target_role)
@@ -585,6 +640,8 @@ async def confirm_revision(
 
     # Update revision status
     rev.status = ResumeStatus.CONFIRMED
+    source.job_target_id = job_target_id
+    source.target_role = target_role or None
     await session.commit()
 
     logger.info("resume_confirmed", resume_id=resume_id, revision_id=revision_id, claims_count=len(claims))
@@ -595,6 +652,80 @@ async def confirm_revision(
         "status": ResumeStatus.CONFIRMED.value,
         "profile": profile.model_dump(mode="json"),
         "claims": [c.model_dump(mode="json") for c in claims],
+    }
+
+
+@router.patch("/{resume_id}/target-role")
+async def update_resume_target_role(
+    resume_id: str,
+    body: TargetRoleUpdateRequest,
+    session: AsyncSession = Depends(get_session),
+    user: Annotated[User, Depends(get_current_user)] = ...,
+):
+    """Update a resume's target role binding and re-rank its claims.
+
+    The binding is persisted on the resume so it survives reloads. When the
+    resume already has a profile and claims, claims are re-extracted with the
+    new target role so priority ordering reflects the role relevance. A failed
+    re-extraction never rolls back the binding update.
+    """
+    source = await _resume_owned_by(session, resume_id, user.user_id)
+    if not source:
+        raise HTTPException(status_code=404, detail="Resume not found")
+
+    job_target_id = body.job_target_id
+    target_role = body.target_role.strip()
+    if job_target_id:
+        job_target = await _job_target_owned_by(session, job_target_id, user.user_id)
+        if not job_target:
+            raise HTTPException(status_code=404, detail="Job target not found")
+        target_role = job_target.title
+
+    source.job_target_id = job_target_id
+    source.target_role = target_role or None
+    await session.commit()
+
+    claims_reextracted = False
+    try:
+        profile_result = await session.execute(
+            select(DBProfile)
+            .where(DBProfile.resume_id == resume_id)
+            .order_by(DBProfile.created_at.desc())
+            .limit(1)
+        )
+        profile_row = profile_result.scalar_one_or_none()
+        if profile_row and profile_row.data:
+            profile = ResumeProfile.model_validate(profile_row.data)
+            service = ResumeService()
+            claims = await service.extract_claims(profile, source.target_role or "")
+            existing_result = await session.execute(
+                select(DBClaim).where(DBClaim.resume_id == resume_id)
+            )
+            existing_by_id = {c.claim_id: c for c in existing_result.scalars().all()}
+            await session.execute(sa_delete(DBClaim).where(DBClaim.resume_id == resume_id))
+            for claim in claims:
+                db_claim = DBClaim(
+                    claim_id=claim.claim_id,
+                    resume_id=resume_id,
+                    data=claim.model_dump(mode="json"),
+                    priority=claim.priority,
+                    confidence=claim.confidence,
+                )
+                prev = existing_by_id.get(claim.claim_id)
+                if prev is not None:
+                    db_claim.disabled = prev.disabled
+                await session.merge(db_claim)
+            claims_reextracted = True
+    except Exception:
+        logger.warning("target_role_reextract_failed", resume_id=resume_id, exc_info=True)
+
+    await session.commit()
+
+    return {
+        "resume_id": resume_id,
+        "target_role": source.target_role,
+        "job_target_id": source.job_target_id,
+        "claims_reextracted": claims_reextracted,
     }
 
 

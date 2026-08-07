@@ -2,7 +2,7 @@
 
 from app.interview.state import InterviewState
 from app.llm.agnes_api import AgnesGateway
-from app.llm.model_router import get_tier
+from app.llm.model_router import resolve_tier
 from app.observability.logging import logger
 
 REPORT_PROMPT = """你是一位面试报告生成器。基于完整的面试数据生成一份全面、客观的面试报告。
@@ -41,7 +41,7 @@ async def generate_report_node(state: InterviewState) -> dict:
             task_name="report_generation",
             system_prompt=REPORT_PROMPT,
             user_prompt=_build_report_context(state),
-            model_tier=get_tier("report_generation"),
+            model_tier=resolve_tier("report_generation", state.get("model_tier")),
             temperature=0.3,
         )
 

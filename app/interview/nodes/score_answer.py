@@ -4,7 +4,7 @@ from app.interview.rubrics import DIMENSION_DESCRIPTIONS, DIMENSION_WEIGHTS
 from app.interview.schemas import AnswerEvaluation
 from app.interview.state import InterviewState
 from app.llm.agnes_api import AgnesGateway
-from app.llm.model_router import get_tier
+from app.llm.model_router import resolve_tier
 from app.observability.logging import logger
 
 SCORER_PROMPT = """你是一位技术面试评分器。从多个维度为候选人的回答打分。
@@ -34,6 +34,48 @@ SCORER_PROMPT = """你是一位技术面试评分器。从多个维度为候选�
 - clarity（10%）：表达是否清晰、结构化？
 
 所有自然语言内容请使用简体中文。"""
+
+_DIMENSION_NAME_FIELDS = frozenset(DIMENSION_WEIGHTS.keys())
+_DIMENSION_FIELD_KEYS = frozenset(
+    {"max_score", "reason", "answer_evidence", "missing_points", "confidence"}
+)
+
+
+def _repair_dimensions(parsed: dict) -> dict:
+    """Restore dimension objects flattened by the LLM.
+
+    The LLM occasionally emits the `dimensions` array with the opening `{` and
+    the `"dimension"`/`"score"` fields dropped, e.g.:
+
+        }, "implementation_depth": 20, "max_score": 100, "reason": "...",
+
+    After json-repair rebalances braces this parses as a dict whose keys are the
+    dimension name and the value its score. Rewrite such entries back into the
+    schema shape so `AnswerEvaluation` validates.
+    """
+    dims = parsed.get("dimensions")
+    if not isinstance(dims, list):
+        return parsed
+
+    repaired = []
+    for entry in dims:
+        if not isinstance(entry, dict) or "dimension" in entry:
+            repaired.append(entry)
+            continue
+
+        flattened = {}
+        for key, value in entry.items():
+            if key in _DIMENSION_FIELD_KEYS:
+                flattened[key] = value
+            elif key in _DIMENSION_NAME_FIELDS:
+                flattened["dimension"] = key
+                flattened["score"] = value
+            else:
+                flattened[key] = value
+        repaired.append(flattened)
+
+    parsed["dimensions"] = repaired
+    return parsed
 
 
 async def score_answer_node(state: InterviewState) -> dict:
@@ -66,7 +108,8 @@ async def score_answer_node(state: InterviewState) -> dict:
                 ],
             },
             output_model=AnswerEvaluation,
-            model_tier=get_tier("answer_scoring"),
+            model_tier=resolve_tier("answer_scoring", state.get("model_tier")),
+            repair=_repair_dimensions,
         )
 
         # Calculate weighted total (code, not LLM)
@@ -83,7 +126,8 @@ async def score_answer_node(state: InterviewState) -> dict:
 
     except Exception as e:
         logger.error("scoring_failed", error=str(e))
-        # Don't generate fake scores - mark as retry needed
+        # Don't generate fake scores - mark as failed so the UI can distinguish
+        # "still organizing" from "scoring genuinely failed".
         return {
             "evaluations": [*state.get("evaluations", []), {
                 "dimensions": [],
@@ -93,5 +137,6 @@ async def score_answer_node(state: InterviewState) -> dict:
                 "evaluation_confidence": 0.0,
                 "model_recommended_action": "follow_up",
                 "model_recommended_depth": 1,
+                "scoring_failed": True,
             }],
         }

@@ -44,7 +44,7 @@ class TestUserAuthenticationFlow:
         login_response = client.post(
             "/api/v1/login",
             json={
-                "email": "e2e_user@example.com",
+                "email": f"e2e_user_{pytest.timestamp}@example.com",
                 "password": "securepass123"
             }
         )

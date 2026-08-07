@@ -1,5 +1,4 @@
 from pydantic_settings import BaseSettings
-from typing import Literal
 
 
 class Settings(BaseSettings):
@@ -11,7 +10,7 @@ class Settings(BaseSettings):
     llm_model_fast: str = "agnes-2.5-flash"
     llm_model_balanced: str = "agnes-2.5-flash"
     llm_model_judge: str = "agnes-2.5-flash"
-    llm_max_tokens: int = 4096
+    llm_max_tokens: int = 8192
     llm_temperature: float = 0
 
     # Database

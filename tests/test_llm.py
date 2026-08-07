@@ -1,12 +1,135 @@
 """Tests for LLM modules: model_router, token_budget, retry, security."""
 
+import json
+
 import pytest
-from app.llm.model_router import TASK_TIER, get_tier, ModelTier
-from app.llm.token_budget import truncate_for_llm, build_question_context
+
 from app.core.security import (
-    sanitize_filename, wrap_user_data, detect_injection_signal,
+    detect_injection_signal,
+    sanitize_filename,
     sanitize_for_log,
+    wrap_user_data,
 )
+from app.llm.agnes_api import AgnesGateway, _escape_string_control_chars
+from app.llm.model_router import get_tier
+from app.llm.token_budget import build_question_context, truncate_for_llm
+
+
+class TestJSONRepair:
+    def test_escape_newline_in_string(self):
+        raw = '{"a": "line1\nline2"}'
+        assert _escape_string_control_chars(raw) == '{"a": "line1\\nline2"}'
+        assert json.loads(_escape_string_control_chars(raw)) == {"a": "line1\nline2"}
+
+    def test_escape_tab_in_string(self):
+        raw = '{"a": "x\ty"}'
+        assert json.loads(_escape_string_control_chars(raw)) == {"a": "x\ty"}
+
+    def test_preserve_structural_whitespace(self):
+        raw = '{\n  "a": 1,\n  "b": [1, 2]\n}'
+        repaired = _escape_string_control_chars(raw)
+        assert repaired == raw  # structural whitespace untouched
+        assert json.loads(repaired) == {"a": 1, "b": [1, 2]}
+
+    def test_escape_only_inside_strings(self):
+        raw = '{"a": "v1\nv2", "b": "w"}'
+        repaired = _escape_string_control_chars(raw)
+        assert json.loads(repaired) == {"a": "v1\nv2", "b": "w"}
+
+    def test_parse_json_escapes_control_chars(self):
+        gateway = AgnesGateway()
+        result = gateway._parse_json('{"dimensions": [{"score": 80, "reason": "good\nwork"}]}')
+        assert result["dimensions"][0]["reason"] == "good\nwork"
+
+    def test_parse_json_strips_markdown_fence(self):
+        gateway = AgnesGateway()
+        raw = '```json\n{"a": 1}\n```'
+        assert gateway._parse_json(raw) == {"a": 1}
+
+    def test_parse_json_extracts_object_from_prose(self):
+        gateway = AgnesGateway()
+        raw = 'Here is your result: {"a": 1} thanks!'
+        assert gateway._parse_json(raw) == {"a": 1}
+
+    def test_parse_json_valid(self):
+        gateway = AgnesGateway()
+        assert gateway._parse_json('{"a": 1}') == {"a": 1}
+
+    def test_parse_json_raises_on_invalid(self):
+        gateway = AgnesGateway()
+        with pytest.raises(json.JSONDecodeError):
+            gateway._parse_json('not json at all')
+
+    def test_parse_json_repairs_missing_object_braces_in_array(self):
+        """LLM sometimes emits array-of-object elements without their opening '{'.
+        json-repair should rebalance braces so the text parses."""
+        gateway = AgnesGateway()
+        raw = """{
+          "dimensions": [
+            {"dimension": "technical_correctness", "score": 85, "max_score": 100},
+            "implementation_depth": 20,
+            "max_score": 100,
+            "reason": "decent"
+          }
+          ],
+          "strengths": ["s"]
+        }"""
+        result = gateway._parse_json(raw)
+        assert isinstance(result["dimensions"], list)
+        assert len(result["dimensions"]) == 2
+
+    def test_parse_json_keeps_valid_untouched(self):
+        gateway = AgnesGateway()
+        raw = '{"dimensions": [{"dimension": "a", "score": 80}], "strengths": ["x"]}'
+        assert gateway._parse_json(raw) == {
+            "dimensions": [{"dimension": "a", "score": 80}],
+            "strengths": ["x"],
+        }
+
+
+class TestDimensionRepair:
+    def test_repair_flattened_dimensions(self):
+        from app.interview.nodes.score_answer import _repair_dimensions
+
+        parsed = {
+            "dimensions": [
+                {"dimension": "technical_correctness", "score": 85, "max_score": 100},
+                {"implementation_depth": 20, "max_score": 100, "reason": "decent"},
+                {"architecture_tradeoffs": 80, "max_score": 100, "reason": "ok"},
+            ],
+            "strengths": ["s"],
+        }
+        result = _repair_dimensions(parsed)
+        assert result["dimensions"][1] == {
+            "dimension": "implementation_depth",
+            "score": 20,
+            "max_score": 100,
+            "reason": "decent",
+        }
+        assert result["dimensions"][2]["dimension"] == "architecture_tradeoffs"
+        assert result["dimensions"][2]["score"] == 80
+        assert result["dimensions"][0] == {
+            "dimension": "technical_correctness",
+            "score": 85,
+            "max_score": 100,
+        }
+
+    def test_repair_leaves_normal_dimensions_untouched(self):
+        from app.interview.nodes.score_answer import _repair_dimensions
+
+        parsed = {
+            "dimensions": [
+                {"dimension": "clarity", "score": 90, "max_score": 100},
+            ]
+        }
+        assert _repair_dimensions(parsed)["dimensions"] == parsed["dimensions"]
+
+    def test_repair_handles_missing_dimensions_key(self):
+        from app.interview.nodes.score_answer import _repair_dimensions
+
+        assert _repair_dimensions({"strengths": ["x"]}) == {"strengths": ["x"]}
+        assert _repair_dimensions({"dimensions": "not-a-list"}) == {"dimensions": "not-a-list"}
+
 
 
 class TestModelRouter:

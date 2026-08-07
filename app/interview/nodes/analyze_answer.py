@@ -3,7 +3,7 @@
 from app.interview.schemas import AnswerAnalysis
 from app.interview.state import InterviewState
 from app.llm.agnes_api import AgnesGateway
-from app.llm.model_router import get_tier
+from app.llm.model_router import resolve_tier
 from app.observability.logging import logger
 
 ANALYZER_PROMPT = """你是一位面试回答分析器，负责分析候选人针对技术问题的回答。
@@ -42,7 +42,7 @@ async def analyze_answer_node(state: InterviewState) -> dict:
                 "strong_signals": current_q.get("strong_signals", []),
             },
             output_model=AnswerAnalysis,
-            model_tier=get_tier("answer_analysis"),
+            model_tier=resolve_tier("answer_analysis", state.get("model_tier")),
         )
 
         logger.info("answer_analyzed", relevance=analysis.answer_relevance)

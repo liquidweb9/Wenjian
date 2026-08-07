@@ -61,6 +61,7 @@ class CreateInterviewRequest(BaseModel):
     job_target_id: str | None = None
     mode: str = "simulation"
     max_turns: int = 15
+    model_tier: str = "auto"
 
 
 class SubmitAnswerRequest(BaseModel):
@@ -455,6 +456,7 @@ async def create_interview(
         "target_role": body.target_role,
         "job_description": body.job_description,
         "interview_mode": body.mode,
+        "model_tier": body.model_tier if body.model_tier in ("fast", "balanced", "judge") else None,
         "resume_profile": profile_data,
         "resume_claims": claims,
         "interview_plan": {},
@@ -725,50 +727,83 @@ async def submit_answer(
         "question_id": body.question_id,
     })
 
-    # Resume graph with answer
+    # Resume graph with answer — stream node updates so staged feedback events
+    # (analysis → scoring → evidence → coaching → next question) are published
+    # progressively as each node completes, instead of all at the very end.
     try:
-        result_state = await interview_graph.ainvoke(
+        current_q = None
+        finished = False
+        turn_count = 0
+        latest_analysis = None
+        latest_eval = None
+        latest_coaching = None
+        final_report = None
+
+        async for update in interview_graph.astream(
             Command(resume={"answer_text": body.answer_text}),
             config,
-        )
+            stream_mode="updates",
+        ):
+            for node_name, node_update in (update or {}).items():
+                if node_name == "wait_for_answer":
+                    turn_count = node_update.get("turn_count", turn_count)
+                elif node_name == "analyze_answer":
+                    analyses = node_update.get("analyses") or []
+                    if analyses:
+                        latest_analysis = analyses[-1]
+                        await _publish(interview_id, "analysis.completed", thread_id, {
+                            "question_id": body.question_id,
+                            "analysis": latest_analysis,
+                        })
+                elif node_name == "score_answer":
+                    evaluations = node_update.get("evaluations") or []
+                    if evaluations:
+                        latest_eval = evaluations[-1]
+                        await _publish(interview_id, "scoring.completed", thread_id, {
+                            "question_id": body.question_id,
+                            "evaluation": latest_eval,
+                        })
+                elif node_name == "update_evidence":
+                    await _publish(interview_id, "evidence.updated", thread_id, {
+                        "question_id": body.question_id,
+                        "claim_statuses": node_update.get("claim_statuses", {}),
+                    })
+                elif node_name == "generate_coaching":
+                    latest_coaching = node_update.get("latest_coaching")
+                    if latest_coaching:
+                        await _publish(interview_id, "coaching.ready", thread_id, {
+                            "question_id": body.question_id,
+                            "coaching": latest_coaching,
+                        })
+                elif node_name == "generate_question":
+                    current_q = node_update.get("current_question")
+                    if current_q:
+                        await _publish(interview_id, "question.ready", thread_id, {
+                            "question_id": current_q.get("question_id"),
+                            "question_text": current_q.get("question_text"),
+                            "turn_count": turn_count,
+                        })
+                elif node_name == "generate_report":
+                    if node_update.get("finished"):
+                        finished = True
+                        final_report = node_update.get("final_report")
+                        await _publish(interview_id, "interview.finished", thread_id, {
+                            "stop_reason": node_update.get("stop_reason"),
+                            "turn_count": turn_count,
+                        })
+                        if final_report:
+                            await _publish(interview_id, "report.ready", thread_id, {})
 
-        current_q = result_state.get("current_question")
-        finished = result_state.get("finished", False)
-        turn_count = result_state.get("turn_count", 0)
-        latest_analysis = result_state.get("analyses", [])[-1] if result_state.get("analyses") else None
-        latest_eval = result_state.get("evaluations", [])[-1] if result_state.get("evaluations") else None
-        latest_coaching = result_state.get("latest_coaching")
-        final_report = result_state.get("final_report")
-
-        # Publish SSE events
-        if latest_analysis:
-            await _publish(interview_id, "analysis.completed", thread_id, {
-                "question_id": body.question_id,
-                "analysis": latest_analysis,
-            })
-        if latest_eval:
-            await _publish(interview_id, "scoring.completed", thread_id, {
-                "question_id": body.question_id,
-                "evaluation": latest_eval,
-            })
-        if latest_coaching:
-            await _publish(interview_id, "coaching.ready", thread_id, {
-                "question_id": body.question_id,
-                "coaching": latest_coaching,
-            })
-        if finished:
-            await _publish(interview_id, "interview.finished", thread_id, {
-                "stop_reason": result_state.get("stop_reason"),
-                "turn_count": turn_count,
-            })
-            if final_report:
-                await _publish(interview_id, "report.ready", thread_id, {})
-        elif current_q:
-            await _publish(interview_id, "question.ready", thread_id, {
-                "question_id": current_q.get("question_id"),
-                "question_text": current_q.get("question_text"),
-                "turn_count": turn_count,
-            })
+        # Fetch the full final state for persistence
+        snapshot = await interview_graph.aget_state(config)
+        result_state = snapshot.values if snapshot else {}
+        current_q = result_state.get("current_question") or current_q
+        finished = result_state.get("finished", False) or finished
+        turn_count = result_state.get("turn_count", 0) or turn_count
+        latest_analysis = latest_analysis or (result_state.get("analyses") or [None])[-1]
+        latest_eval = latest_eval or (result_state.get("evaluations") or [None])[-1]
+        latest_coaching = latest_coaching or result_state.get("latest_coaching")
+        final_report = final_report or result_state.get("final_report")
 
         if finished:
             interview.status = "finished"

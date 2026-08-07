@@ -25,3 +25,16 @@ TASK_TIER: dict[str, ModelTier] = {
 
 def get_tier(task_name: str) -> ModelTier:
     return TASK_TIER.get(task_name, "balanced")
+
+
+def resolve_tier(task_name: str, interview_tier: str | None = None) -> ModelTier:
+    """Resolve the effective tier for a call.
+
+    A per-interview tier (selected by the user, stored in graph state) takes
+    precedence over the platform's per-task routing. ``None``/unknown values
+    fall back to the task-based mapping, so existing behavior is preserved when
+    no tier is selected.
+    """
+    if interview_tier in ("fast", "balanced", "judge"):
+        return interview_tier
+    return get_tier(task_name)

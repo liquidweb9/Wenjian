@@ -80,8 +80,9 @@ class EvidenceSpanExtractor:
     for claim verification.
     """
 
-    def __init__(self, llm: LLMGateway):
+    def __init__(self, llm: LLMGateway, model_tier: str | None = None):
         self.llm = llm
+        self.model_tier = model_tier
 
     async def extract_spans(
         self,
@@ -111,11 +112,16 @@ class EvidenceSpanExtractor:
             {"role": "user", "content": prompt},
         ]
 
+        kwargs: dict = {}
+        if self.model_tier is not None:
+            kwargs["model_tier"] = self.model_tier
+
         result = await self.llm.generate_structured(
             task_name="evidence_span_extraction",
             messages=messages,
             output_model=EvidenceSpanOutput,
             temperature=0.0,
+            **kwargs,
         )
 
         # Validate and convert spans

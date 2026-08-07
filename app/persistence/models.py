@@ -45,6 +45,12 @@ class ResumeSource(Base):
     source_type: Mapped[SourceType] = mapped_column(SAEnum(SourceType))
     sha256: Mapped[str | None] = mapped_column(String(64))
     file_size: Mapped[int | None] = mapped_column(Integer)
+    job_target_id: Mapped[str | None] = mapped_column(
+        String(64),
+        ForeignKey("job_targets.job_target_id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    target_role: Mapped[str | None] = mapped_column(String(256), nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow)
 
     revisions: Mapped[list["ResumeRevision"]] = relationship(

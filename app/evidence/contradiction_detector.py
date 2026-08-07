@@ -79,9 +79,10 @@ class ContradictionDetector:
     to identify factual, timeline, role, or scope contradictions.
     """
 
-    def __init__(self, llm: LLMGateway, id_generator=None):
+    def __init__(self, llm: LLMGateway, id_generator=None, model_tier: str | None = None):
         self.llm = llm
         self.id_generator = id_generator or (lambda: f"ct_{id(self)}")
+        self.model_tier = model_tier
 
     async def detect_contradictions(
         self,
@@ -117,11 +118,16 @@ class ContradictionDetector:
             {"role": "user", "content": prompt},
         ]
 
+        kwargs: dict = {}
+        if self.model_tier is not None:
+            kwargs["model_tier"] = self.model_tier
+
         result = await self.llm.generate_structured(
             task_name="contradiction_detection",
             messages=messages,
             output_model=ContradictionOutput,
             temperature=0.0,
+            **kwargs,
         )
 
         # Convert to Contradiction objects

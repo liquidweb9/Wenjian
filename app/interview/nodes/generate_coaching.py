@@ -4,7 +4,7 @@ from app.interview.coaching import merge_coaching_with_evidence
 from app.interview.schemas import AnswerCoaching
 from app.interview.state import InterviewState
 from app.llm.agnes_api import AgnesGateway
-from app.llm.model_router import get_tier
+from app.llm.model_router import resolve_tier
 from app.observability.logging import logger
 
 COACHING_PROMPT = """你是一位面试教练。针对候选人的回答给出详细反馈。
@@ -54,7 +54,7 @@ async def generate_coaching_node(state: InterviewState) -> dict:
                 },
             },
             output_model=AnswerCoaching,
-            model_tier=get_tier("coaching"),
+            model_tier=resolve_tier("coaching", state.get("model_tier")),
         )
 
         result = merge_coaching_with_evidence(

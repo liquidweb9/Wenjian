@@ -4,30 +4,30 @@ Phase 2: Integrates Evidence Engine 2.0 with state machine, span extraction,
 and contradiction detection.
 """
 
-from app.interview.state import InterviewState
 from app.core.enums import ClaimStatusEnum
 from app.core.ids import new_id
-from app.observability.logging import logger
-from app.interview.schemas import EvidenceItem
 
 # Phase 2 imports
 from app.evidence import (
-    EvidenceStateMachine,
-    EvidenceSpanExtractor,
     ContradictionDetector,
-    TransitionContext,
-    ReasonCode,
+    EvidenceSpanExtractor,
     EvidenceState,
+    EvidenceStateMachine,
+    ReasonCode,
+    TransitionContext,
 )
+from app.interview.schemas import EvidenceItem
+from app.interview.state import InterviewState
 from app.llm.agnes_api import AgnesGateway
+from app.observability.logging import logger
+from app.persistence.database import async_session_factory
 from app.persistence.models import (
-    VerificationPoint,
+    Contradiction,
     Evidence,
     EvidenceTransition,
-    Contradiction,
+    VerificationPoint,
 )
 from app.persistence.repositories.evidence_repo import EvidenceRepository
-from app.persistence.database import async_session_factory
 
 
 def _count_vpoints(state: InterviewState, claim_id: str) -> int:
@@ -39,11 +39,15 @@ def _count_vpoints(state: InterviewState, claim_id: str) -> int:
 
 
 def _get_vp_from_claim(state: InterviewState, claim_id: str, vp_id: str) -> dict | None:
-    """Get verification point dict from claim."""
+    """Get verification point dict from claim.
+
+    Claim verification points use ``point_id`` as their identifier; questions
+    reference the same value as ``verification_point_id``.
+    """
     for rc in state.get("resume_claims", []):
         if rc.get("claim_id") == claim_id:
             for vp in rc.get("verification_points", []):
-                if vp.get("verification_point_id") == vp_id:
+                if (vp.get("verification_point_id") or vp.get("point_id")) == vp_id:
                     return vp
     return None
 
@@ -78,9 +82,10 @@ async def update_evidence_node(state: InterviewState) -> dict:
 
     # Initialize Evidence Engine 2.0 components
     llm = AgnesGateway()
+    interview_tier = state.get("model_tier")
     state_machine = EvidenceStateMachine()
-    span_extractor = EvidenceSpanExtractor(llm=llm)
-    contradiction_detector = ContradictionDetector(llm=llm, id_generator=lambda: new_id("ct"))
+    span_extractor = EvidenceSpanExtractor(llm=llm, model_tier=interview_tier)
+    contradiction_detector = ContradictionDetector(llm=llm, id_generator=lambda: new_id("ct"), model_tier=interview_tier)
 
     # Create database session
     async with async_session_factory() as session:
@@ -104,7 +109,7 @@ async def update_evidence_node(state: InterviewState) -> dict:
                             claim_id=current_claim_id,
                             competency_code=vp_dict.get("competency_code", ""),
                             requirement_id=vp_dict.get("requirement_id"),
-                            aspect=vp_dict.get("aspect", ""),
+                            aspect=vp_dict.get("aspect") or vp_dict.get("description") or "",
                             expected_evidence=vp_dict.get("expected_evidence", {}),
                             current_state=EvidenceState.UNSEEN.value,
                             strength=None,

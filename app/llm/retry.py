@@ -2,9 +2,11 @@
 
 import asyncio
 import functools
-from typing import Any
+import ssl
+
 import httpx
 from pydantic import ValidationError
+
 from app.observability.logging import logger
 
 
@@ -30,6 +32,14 @@ def retry_llm_call(max_retries: int = 3):
                     last_error = e
                     wait = 2 ** attempt
                     logger.warning("llm_retry_timeout", attempt=attempt + 1, wait=wait)
+                    await asyncio.sleep(wait)
+                    continue
+                except (httpx.TransportError, ssl.SSLError) as e:
+                    # Transient connection/TLS failures, e.g. "[SSL] record layer
+                    # failure", which httpx does not map to a status code.
+                    last_error = e
+                    wait = 2 ** attempt
+                    logger.warning("llm_retry_transport", attempt=attempt + 1, error=str(e)[:120], wait=wait)
                     await asyncio.sleep(wait)
                     continue
                 except ValidationError as e:

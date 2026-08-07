@@ -14,6 +14,7 @@ class InterviewState(TypedDict):
     target_role: str
     job_description: str | None
     interview_mode: str
+    model_tier: str | None  # per-interview tier override; None = auto (task routing)
 
     # Resume data
     resume_profile: dict
