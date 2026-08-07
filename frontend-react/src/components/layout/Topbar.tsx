@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from "react-router-dom"
-import { Menu, UserRound, LogOut } from "lucide-react"
+import { Menu, UserRound, LogOut, Settings } from "lucide-react"
 import { useUIStore } from "@/stores/ui-store"
 import { useAuthStore } from "@/stores/auth-store"
 import { PAGE_TITLES } from "@/lib/brand"
@@ -25,6 +25,11 @@ export function Topbar() {
   const handleLogout = () => {
     clearAuth()
     navigate("/login")
+  }
+
+  const handleNavigate = (path: string) => {
+    setShowUserMenu(false)
+    navigate(path)
   }
 
   return (
@@ -129,6 +134,33 @@ export function Topbar() {
                 borderRadius: 12,
               }}
             >
+              <button
+                onClick={() => handleNavigate("/app/settings")}
+                style={{
+                  width: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.75rem",
+                  padding: "0.65rem 0.75rem",
+                  fontSize: "0.9rem",
+                  color: "var(--wj-text-primary)",
+                  background: "transparent",
+                  border: "none",
+                  borderRadius: 8,
+                  cursor: "pointer",
+                  textAlign: "left",
+                  transition: "background 0.15s",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "var(--wj-bg-muted)"
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "transparent"
+                }}
+              >
+                <Settings size={16} />
+                <span>设置</span>
+              </button>
               <button
                 onClick={handleLogout}
                 style={{

@@ -1,4 +1,5 @@
 import { useAnalyticsSummary, useAnalyticsTrends } from "../hooks/use-analytics"
+import { PageHeader } from "@/components/common/page-header"
 import { usePageTitle } from "@/lib/use-page-title"
 
 export default function AnalyticsPage() {
@@ -8,7 +9,10 @@ export default function AnalyticsPage() {
 
   return (
     <div>
-      <h2 style={{ fontSize: "1.25rem", fontWeight: 600, marginBottom: "1.5rem" }}>能力分析</h2>
+      <PageHeader
+        title="能力分析"
+        description="汇总面试表现：得分分布、优势与待提升能力，以及跨时间的变化趋势。"
+      />
 
       {/* Summary cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "1rem", marginBottom: "2rem" }}>

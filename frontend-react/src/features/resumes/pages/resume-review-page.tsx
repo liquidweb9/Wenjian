@@ -1,8 +1,11 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useParams, useNavigate, Link } from "react-router-dom"
-import { useResume, useResumeClaims, useUpdateRevision, useConfirmRevision } from "../hooks/use-resumes"
+import { useResume, useResumeClaims, useUpdateRevision, useConfirmRevision, useUpdateTargetRole } from "../hooks/use-resumes"
+import { useJobTargets } from "@/features/job-target/hooks/use-job-targets"
 import type { ClaimItem } from "../api/resume-api"
 import { ApiError } from "@/lib/api-client"
+import { BackButton } from "@/components/common/back-button"
+import { PageHeader } from "@/components/common/page-header"
 
 function qualityColor(score: number | null | undefined): string {
   if (score == null) return "#94a3b8"
@@ -34,12 +37,15 @@ export default function ResumeReviewPage() {
   const navigate = useNavigate()
   const { data, isLoading, isError } = useResume(resumeId)
   const { data: claimsData } = useResumeClaims(resumeId)
+  const { data: jobTargets } = useJobTargets()
   const updateMutation = useUpdateRevision()
   const confirmMutation = useConfirmRevision()
+  const targetRoleMutation = useUpdateTargetRole()
 
   const [editing, setEditing] = useState(false)
   const [editText, setEditText] = useState("")
-  const [targetRole, setTargetRole] = useState("Software Engineer")
+  const [targetRole, setTargetRole] = useState("")
+  const [selectedJobTargetId, setSelectedJobTargetId] = useState<string | null>(null)
   const [dirty, setDirty] = useState(false)
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
 
@@ -49,6 +55,30 @@ export default function ResumeReviewPage() {
     }
   }, [data?.normalized_text])
 
+  const selectedJobTarget = jobTargets?.find((jt) => jt.job_target_id === selectedJobTargetId)
+
+  const dataJobTargetId = data?.job_target_id
+  const dataTargetRole = data?.target_role
+  const dataJobTargetTitle = data?.job_target_title
+  const hasTargetRoleChange =
+    (selectedJobTargetId ?? null) !== (dataJobTargetId ?? null) ||
+    (targetRole || "") !== (dataTargetRole || "")
+  const hydratedKey = useRef("")
+
+  useEffect(() => {
+    if (!dataJobTargetId && dataTargetRole == null) return
+    const key = `${dataJobTargetId ?? ""}|${dataTargetRole ?? ""}`
+    if (hydratedKey.current === key) return
+    hydratedKey.current = key
+    if (dataJobTargetId && jobTargets?.some((jt) => jt.job_target_id === dataJobTargetId)) {
+      setSelectedJobTargetId(dataJobTargetId)
+      setTargetRole(dataJobTargetTitle ?? dataTargetRole ?? "")
+    } else {
+      setSelectedJobTargetId(null)
+      setTargetRole(dataTargetRole ?? "")
+    }
+  }, [dataJobTargetId, dataTargetRole, dataJobTargetTitle, jobTargets])
+
   if (isLoading) {
     return <div style={{ padding: "2rem", textAlign: "center", color: "#64748b" }}>加载中...</div>
   }
@@ -57,7 +87,7 @@ export default function ResumeReviewPage() {
     return (
       <div style={{ padding: "2rem", textAlign: "center" }}>
         <p style={{ color: "#e63946" }}>加载失败或简历不存在</p>
-        <button onClick={() => navigate("/app/resumes")} style={backBtnStyle}>返回列表</button>
+        <BackButton to="/app/resumes" label="返回列表" />
       </div>
     )
   }
@@ -89,6 +119,7 @@ export default function ResumeReviewPage() {
         resumeId: resumeId!,
         revisionId: resolved.revision_id,
         targetRole,
+        jobTargetId: selectedJobTargetId,
       })
       setMessage({ type: "success", text: "确认成功，主张已提取" })
       navigate(`/app/resumes/${resumeId}/profile`)
@@ -100,26 +131,46 @@ export default function ResumeReviewPage() {
     }
   }
 
+  async function handleSaveTargetRole() {
+    setMessage(null)
+    try {
+      await targetRoleMutation.mutateAsync({
+        resumeId: resumeId!,
+        targetRole,
+        jobTargetId: selectedJobTargetId,
+      })
+      setMessage({
+        type: "success",
+        text: dataTargetRole ? "目标岗位已修改，主张已按新岗位重新排序" : "目标岗位已保存，主张已按新岗位重新排序",
+      })
+    } catch (e) {
+      setMessage({ type: "error", text: e instanceof ApiError ? e.message : "保存目标岗位失败" })
+    }
+  }
+
   const isConfirmed = data.status === "CONFIRMED"
 
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "1rem" }}>
-        <button onClick={() => navigate("/app/resumes")} style={backBtnStyle}>← 返回</button>
-        <h2 style={{ fontSize: "1.25rem", fontWeight: 600 }}>简历解析确认</h2>
-        <span
-          style={{
-            padding: "0.2rem 0.6rem",
-            borderRadius: "10px",
-            fontSize: "0.75rem",
-            fontWeight: 500,
-            color: "#fff",
-            backgroundColor: isConfirmed ? "#22c55e" : "#f59e0b",
-          }}
-        >
-          {isConfirmed ? "已确认" : "待确认"}
-        </span>
-      </div>
+      <PageHeader
+        title="简历解析确认"
+        description="检查解析后的规范化文本，确认无误后即可用于创建模拟面试。"
+        back={{ to: "/app/resumes", label: "返回简历管理" }}
+        action={
+          <span
+            style={{
+              padding: "0.25rem 0.7rem",
+              borderRadius: 999,
+              fontSize: "0.78rem",
+              fontWeight: 600,
+              color: "#fff",
+              backgroundColor: isConfirmed ? "#22c55e" : "#f59e0b",
+            }}
+          >
+            {isConfirmed ? "已确认" : "待确认"}
+          </span>
+        }
+      />
 
       {message && (
         <div
@@ -257,25 +308,78 @@ export default function ResumeReviewPage() {
             </ul>
           </div>
 
-          {/* Confirm section */}
-          {!isConfirmed && (
+          {/* Target role section */}
+          {!isConfirmed ? (
             <div style={{ marginTop: "1.5rem", paddingTop: "1rem", borderTop: "1px solid #e2e8f0" }}>
               <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 500, marginBottom: "0.25rem" }}>
                 目标岗位
               </label>
-              <input
-                value={targetRole}
-                onChange={(e) => setTargetRole(e.target.value)}
-                placeholder="例如：Software Engineer"
+              <select
+                value={selectedJobTargetId ?? ""}
+                onChange={(e) => {
+                  const id = e.target.value
+                  const jobTarget = jobTargets?.find((jt) => jt.job_target_id === id)
+                  setSelectedJobTargetId(id || null)
+                  if (jobTarget) setTargetRole(jobTarget.title)
+                }}
                 style={{
                   width: "100%",
                   padding: "0.5rem 0.75rem",
                   border: "1px solid #e2e8f0",
                   borderRadius: "6px",
                   fontSize: "0.9rem",
-                  marginBottom: "0.75rem",
+                  marginBottom: "0.5rem",
+                  backgroundColor: "#fff",
                 }}
-              />
+              >
+                <option value="">自定义输入</option>
+                {jobTargets?.map((jt) => (
+                  <option key={jt.job_target_id} value={jt.job_target_id}>
+                    {jt.title}
+                    {jt.description ? ` · ${jt.description}` : ""}
+                  </option>
+                ))}
+              </select>
+              {selectedJobTarget && (
+                <div style={{ fontSize: "0.8rem", color: "#64748b", marginBottom: "0.5rem" }}>
+                  已选择：{selectedJobTarget.description ?? selectedJobTarget.level}
+                </div>
+              )}
+              {selectedJobTarget ? (
+                <input
+                  value={targetRole}
+                  disabled
+                  title="已绑定所选目标岗位，标题不可编辑"
+                  style={{
+                    width: "100%",
+                    padding: "0.5rem 0.75rem",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "6px",
+                    fontSize: "0.9rem",
+                    marginBottom: "0.75rem",
+                    backgroundColor: "#f1f5f9",
+                    color: "#64748b",
+                  }}
+                />
+              ) : (
+                <input
+                  value={targetRole}
+                  onChange={(e) => setTargetRole(e.target.value)}
+                  placeholder="例如：Software Engineer（手动输入）"
+                  style={{
+                    width: "100%",
+                    padding: "0.5rem 0.75rem",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "6px",
+                    fontSize: "0.9rem",
+                    marginBottom: "0.75rem",
+                  }}
+                />
+              )}
+              <p style={{ fontSize: "0.75rem", color: "#64748b", lineHeight: 1.6, marginBottom: "0.75rem" }}>
+                目标岗位用于指导技术主张的优先级排序：与岗位技术栈相关的主张占优先级权重 30%，
+                会被排在最前并在面试中优先考察；不填写时所有主张按统一规则排序，不做岗位相关性区分。
+              </p>
               <button
                 onClick={handleConfirm}
                 disabled={confirmMutation.isPending}
@@ -291,6 +395,98 @@ export default function ResumeReviewPage() {
                 }}
               >
                 {confirmMutation.isPending ? "确认中..." : "确认并提取主张"}
+              </button>
+            </div>
+          ) : (
+            <div style={{ marginTop: "1.5rem", paddingTop: "1rem", borderTop: "1px solid #e2e8f0" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.25rem" }}>
+                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600 }}>目标岗位</label>
+                <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                  当前：{data.target_role || "未绑定"}
+                  {data.job_target_title ? `（${data.job_target_title}）` : ""}
+                </span>
+              </div>
+              <select
+                value={selectedJobTargetId ?? ""}
+                onChange={(e) => {
+                  const id = e.target.value
+                  const jobTarget = jobTargets?.find((jt) => jt.job_target_id === id)
+                  setSelectedJobTargetId(id || null)
+                  if (jobTarget) setTargetRole(jobTarget.title)
+                }}
+                style={{
+                  width: "100%",
+                  padding: "0.5rem 0.75rem",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "6px",
+                  fontSize: "0.9rem",
+                  marginBottom: "0.5rem",
+                  backgroundColor: "#fff",
+                }}
+              >
+                <option value="">自定义输入</option>
+                {jobTargets?.map((jt) => (
+                  <option key={jt.job_target_id} value={jt.job_target_id}>
+                    {jt.title}
+                    {jt.description ? ` · ${jt.description}` : ""}
+                  </option>
+                ))}
+              </select>
+              {selectedJobTarget ? (
+                <input
+                  value={targetRole}
+                  disabled
+                  title="已绑定所选目标岗位，标题不可编辑"
+                  style={{
+                    width: "100%",
+                    padding: "0.5rem 0.75rem",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "6px",
+                    fontSize: "0.9rem",
+                    marginBottom: "0.75rem",
+                    backgroundColor: "#f1f5f9",
+                    color: "#64748b",
+                  }}
+                />
+              ) : (
+                <input
+                  value={targetRole}
+                  onChange={(e) => setTargetRole(e.target.value)}
+                  placeholder="例如：Software Engineer（手动输入）"
+                  style={{
+                    width: "100%",
+                    padding: "0.5rem 0.75rem",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "6px",
+                    fontSize: "0.9rem",
+                    marginBottom: "0.75rem",
+                  }}
+                />
+              )}
+              <p style={{ fontSize: "0.75rem", color: "#64748b", lineHeight: 1.6, marginBottom: "0.75rem" }}>
+                {data.target_role
+                  ? "修改目标岗位会按新岗位重新排序已有主张（保留手动禁用的主张）。"
+                  : "保存目标岗位后，主张将按新岗位重新排序（保留手动禁用的主张）。"}
+              </p>
+              <button
+                onClick={handleSaveTargetRole}
+                disabled={targetRoleMutation.isPending || !hasTargetRoleChange}
+                style={{
+                  width: "100%",
+                  padding: "0.6rem 1.5rem",
+                  backgroundColor: targetRoleMutation.isPending || !hasTargetRoleChange ? "#cbd5e1" : "#22c55e",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: "6px",
+                  fontSize: "0.9rem",
+                  fontWeight: 500,
+                }}
+              >
+                {targetRoleMutation.isPending
+                  ? "保存中..."
+                  : data.target_role
+                    ? "修改目标岗位"
+                    : "保存目标岗位"}
               </button>
             </div>
           )}
@@ -521,15 +717,6 @@ const panelHeaderStyle: React.CSSProperties = {
   fontWeight: 600,
   color: "#64748b",
   margin: 0,
-}
-const backBtnStyle: React.CSSProperties = {
-  padding: "0.4rem 0.8rem",
-  backgroundColor: "transparent",
-  color: "#64748b",
-  border: "1px solid #e2e8f0",
-  borderRadius: "6px",
-  fontSize: "0.85rem",
-  cursor: "pointer",
 }
 const smallPrimaryBtn: React.CSSProperties = {
   padding: "0.3rem 0.75rem",

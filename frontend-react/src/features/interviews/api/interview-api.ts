@@ -1,4 +1,7 @@
 import { api, getAuthToken } from "@/lib/api-client"
+import { env } from "@/lib/env"
+
+const SSE_BASE_URL = `${env.VITE_API_BASE_URL.replace(/\/$/, "")}/api/v1`
 
 export interface InterviewListParams {
   page?: number
@@ -38,6 +41,7 @@ export interface CreateInterviewParams {
   job_target_id?: string
   mode?: string
   max_turns?: number
+  model_tier?: "auto" | "fast" | "balanced" | "judge"
 }
 
 export interface HistoryEntry {
@@ -96,6 +100,7 @@ export async function createInterview(params: CreateInterviewParams) {
     job_target_id: params.job_target_id || null,
     mode: params.mode || "simulation",
     max_turns: params.max_turns ?? 15,
+    model_tier: params.model_tier || "auto",
   }, {
     // Build plan + generate the first question are LLM calls that routinely
     // exceed the global 120s timeout even though the server completes normally.
@@ -149,7 +154,7 @@ export async function getInterviewEvents(
   const headers: Record<string, string> = { Accept: "text/event-stream" }
   const token = getAuthToken()
   if (token) headers.Authorization = `Bearer ${token}`
-  const response = await fetch(`/api/v1/interviews/${interviewId}/events`, {
+  const response = await fetch(`${SSE_BASE_URL}/interviews/${interviewId}/events`, {
     headers,
     signal,
   })

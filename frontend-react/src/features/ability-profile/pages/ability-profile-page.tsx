@@ -1,6 +1,7 @@
-import { useParams, useNavigate } from "react-router-dom"
+import { useParams } from "react-router-dom"
 import { useAbilityProfile } from "../hooks/use-ability-profile"
 import { usePageTitle } from "@/lib/use-page-title"
+import { PageHeader } from "@/components/common/page-header"
 import type {
   CompetencySummary,
   StabilityLevel,
@@ -11,28 +12,15 @@ import type {
 export default function AbilityProfilePage() {
   usePageTitle("", "能力档案")
   const { resumeId } = useParams<{ resumeId: string }>()
-  const navigate = useNavigate()
   const { data, isLoading, isError, refetch } = useAbilityProfile(resumeId)
 
   return (
     <div style={{ display: "grid", gap: "1rem" }}>
-      <section className="app-surface" style={{ padding: "1.5rem 1.6rem" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-          <button
-            onClick={() => navigate(`/app/resumes/${resumeId}/claims`)}
-            style={styles.backButton}
-          >
-            ← 返回
-          </button>
-          <div>
-            <div className="app-eyebrow">Cross-session Ability Profile</div>
-            <h1 style={styles.title}>能力档案</h1>
-            <p style={styles.subtitle}>
-              跨场次能力聚合：追踪同一简历在多次面试中的能力表现、稳定性与迁移验证
-            </p>
-          </div>
-        </div>
-      </section>
+      <PageHeader
+        title="能力档案"
+        description="跨场次能力聚合：追踪同一简历在多次面试中的能力表现、稳定性与迁移验证。"
+        back={{ to: `/app/resumes/${resumeId}/claims`, label: "返回技术主张" }}
+      />
 
       {isLoading ? (
         <section className="app-surface" style={styles.centerBox}>
@@ -356,27 +344,6 @@ function dimensionLabel(name: string): string {
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  backButton: {
-    padding: "0.4rem 0.8rem",
-    backgroundColor: "transparent",
-    color: "var(--wj-text-secondary)",
-    border: "1px solid var(--wj-border-default)",
-    borderRadius: "6px",
-    fontSize: "0.85rem",
-    cursor: "pointer",
-    flexShrink: 0,
-  },
-  title: {
-    margin: "0.45rem 0 0",
-    fontSize: "1.7rem",
-    fontWeight: 600,
-    color: "var(--wj-text-primary)",
-  },
-  subtitle: {
-    margin: "0.55rem 0 0",
-    color: "var(--wj-text-secondary)",
-    lineHeight: 1.7,
-  },
   centerBox: {
     padding: "2.5rem 1.5rem",
     textAlign: "center",

@@ -1,6 +1,9 @@
 import { getAuthToken } from "@/lib/api-client"
+import { env } from "@/lib/env"
 
 export type SSECallback = (event: Record<string, unknown>) => void
+
+const SSE_BASE_URL = `${env.VITE_API_BASE_URL.replace(/\/$/, "")}/api/v1`
 
 export function createSSEConnection(
   interviewId: string,
@@ -21,7 +24,7 @@ export function createSSEConnection(
       const headers: Record<string, string> = { Accept: "text/event-stream" }
       const token = getAuthToken()
       if (token) headers.Authorization = `Bearer ${token}`
-      const response = await fetch(`/api/v1/interviews/${interviewId}/events`, {
+      const response = await fetch(`${SSE_BASE_URL}/interviews/${interviewId}/events`, {
         headers,
         signal,
       })

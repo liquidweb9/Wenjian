@@ -7,6 +7,7 @@ import {
   useUpdateTrainingTask,
 } from "../hooks/use-training-plan"
 import { usePageTitle } from "@/lib/use-page-title"
+import { PageHeader } from "@/components/common/page-header"
 import type { TrainingTask, TrainingTaskStatus } from "@/lib/types/training-plan"
 
 type StatusFilter = "ALL" | TrainingTaskStatus
@@ -83,21 +84,11 @@ export default function TrainingPlanPage() {
 
   return (
     <div style={{ display: "grid", gap: "1rem" }}>
-      <section className="app-surface" style={{ padding: "1.5rem 1.6rem" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-          <button
-            onClick={() => navigate(`/app/resumes/${resumeId}/ability-profile`)}
-            style={styles.backButton}
-          >
-            ← 返回
-          </button>
-          <div style={{ flex: 1 }}>
-            <div className="app-eyebrow">Training Plan</div>
-            <h1 style={styles.title}>训练计划</h1>
-            <p style={styles.subtitle}>
-              根据面试中的证据缺口与能力短板生成可执行任务；完成后可启动复验，针对性验证是否真正补强。
-            </p>
-          </div>
+      <PageHeader
+        title="训练计划"
+        description="根据面试中的证据缺口与能力短板生成可执行任务；完成后可启动复验，针对性验证是否真正补强。"
+        back={{ to: `/app/resumes/${resumeId}/ability-profile`, label: "返回能力档案" }}
+        action={
           <button
             type="button"
             className="btn-primary"
@@ -106,17 +97,19 @@ export default function TrainingPlanPage() {
           >
             {generatePlan.isPending ? "正在生成…" : "生成训练计划"}
           </button>
-        </div>
+        }
+      />
 
-        {!isLoading && !isError ? (
+      {!isLoading && !isError ? (
+        <section className="app-surface" style={{ padding: "1.5rem 1.6rem" }}>
           <div style={styles.statsGrid}>
             <StatCard label="待开始" value={pendingCount} tone="var(--wj-text-secondary)" />
             <StatCard label="进行中" value={inProgressCount} tone="#2563eb" />
             <StatCard label="已完成" value={completedCount} tone="var(--wj-success)" />
             <StatCard label="总任务" value={tasks.length} tone="var(--wj-brand-secondary)" />
           </div>
-        ) : null}
-      </section>
+        </section>
+      ) : null}
 
       {isLoading ? (
         <section className="app-surface" style={styles.centerBox}>
@@ -338,27 +331,6 @@ function statusBadgeStyle(st: { bg: string; text: string }): React.CSSProperties
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  backButton: {
-    padding: "0.4rem 0.8rem",
-    backgroundColor: "transparent",
-    color: "var(--wj-text-secondary)",
-    border: "1px solid var(--wj-border-default)",
-    borderRadius: "6px",
-    fontSize: "0.85rem",
-    cursor: "pointer",
-    flexShrink: 0,
-  },
-  title: {
-    margin: "0.45rem 0 0",
-    fontSize: "1.7rem",
-    fontWeight: 600,
-    color: "var(--wj-text-primary)",
-  },
-  subtitle: {
-    margin: "0.55rem 0 0",
-    color: "var(--wj-text-secondary)",
-    lineHeight: 1.7,
-  },
   centerBox: { padding: "2.5rem 1.5rem", textAlign: "center", display: "grid", gap: "0.5rem", justifyItems: "center" },
   emptyTitle: { fontSize: "1.1rem", fontWeight: 600, color: "var(--wj-text-primary)" },
   emptyText: {
@@ -383,7 +355,6 @@ const styles: Record<string, React.CSSProperties> = {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
     gap: "1rem",
-    marginTop: "1rem",
   },
   statCard: {
     padding: "1rem 1.2rem",

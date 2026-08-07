@@ -1,5 +1,7 @@
 import axios from "axios"
 
+import { env } from "@/lib/env"
+
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
@@ -25,7 +27,7 @@ export function getAuthToken(): string | null {
 }
 
 export const api = axios.create({
-  baseURL: "/api/v1",
+  baseURL: `${env.VITE_API_BASE_URL.replace(/\/$/, "")}/api/v1`,
   // Ordinary reads should fail fast. Long-running interview mutations override
   // this because one answer can legitimately execute several dependent LLM nodes.
   timeout: 120_000,

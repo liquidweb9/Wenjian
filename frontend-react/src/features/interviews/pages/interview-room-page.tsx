@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { ArrowLeft, BrainCircuit, CheckCircle2, FileSearch, LoaderCircle, ShieldCheck, Sparkles } from "lucide-react"
 import { BrandLogo } from "@/components/brand/BrandLogo"
+import { BackButton } from "@/components/common/back-button"
 import { useInterviewStream } from "../hooks/use-interview-stream"
 import { useFinishInterview, useInterview, useSubmitAnswer } from "../hooks/use-interviews"
 import { useInterviewDraftStore } from "@/stores/interview-draft-store"
@@ -245,6 +246,7 @@ export default function InterviewRoomPage() {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: "0.95rem" }}>
+          <BackButton to="/app/interviews" label="返回记录" />
           <BrandLogo linkTo="/app/interviews" size={38} />
           <div>
             <div className="app-eyebrow">模拟面试</div>
@@ -281,10 +283,6 @@ export default function InterviewRoomPage() {
         </div>
 
         <div style={{ display: "flex", gap: "0.65rem" }}>
-          <button type="button" className="btn-secondary" onClick={() => navigate("/app/interviews")}>
-            <ArrowLeft size={16} />
-            返回记录
-          </button>
           {!isFinished ? (
             <button type="button" className="btn-danger" disabled={finishInterview.isPending} onClick={handleFinish}>
               {finishInterview.isPending ? "正在结束…" : "结束面试"}
@@ -397,11 +395,11 @@ export default function InterviewRoomPage() {
             <CenteredStatus message={stageMessages[stage]} mode="connecting" />
           ) : null}
 
-          {selectedHistoryIdx == null && stage === "waiting_for_question" ? (
+          {selectedHistoryIdx == null && !isTransitioning && stage === "waiting_for_question" ? (
             <CenteredStatus message="问鉴正在结合你的简历证据与前序回答，生成下一轮深度追问。" mode="question" />
           ) : null}
 
-          {selectedHistoryIdx == null && (stage === "answering" || stage === "submitting") && currentQuestionText && !isRecoveringSubmission ? (
+          {selectedHistoryIdx == null && !isTransitioning && (stage === "answering" || stage === "submitting") && currentQuestionText && !isRecoveringSubmission ? (
             <>
               <section style={{ padding: "1.4rem 1.5rem 1rem", borderBottom: "1px solid var(--wj-border-subtle)" }}>
                 <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap", marginBottom: "0.5rem" }}>
@@ -511,10 +509,12 @@ export default function InterviewRoomPage() {
             </>
           ) : null}
 
-          {selectedHistoryIdx == null && (isAnalyzing || isRecoveringSubmission) && stage !== "submitting" ? (
+          {selectedHistoryIdx == null && !isTransitioning && (isAnalyzing || isRecoveringSubmission) && stage !== "submitting" ? (
             <section style={{ padding: "1.6rem 1.5rem", overflow: "auto" }}>
               <AnalysisProgress
+                hasAnalysis={Boolean(runtime.latestAnalysis)}
                 hasEvaluation={Boolean(runtime.latestEvaluation)}
+                hasEvidence={runtime.evidenceUpdated}
                 hasCoaching={Boolean(runtime.latestCoaching)}
                 submissionKey={lastSubmissionKey}
               />
@@ -741,18 +741,22 @@ function CenteredStatus({
 }
 
 function AnalysisProgress({
+  hasAnalysis,
   hasEvaluation,
+  hasEvidence,
   hasCoaching,
   submissionKey,
 }: {
+  hasAnalysis: boolean
   hasEvaluation: boolean
+  hasEvidence: boolean
   hasCoaching: boolean
   submissionKey: string
 }) {
   const steps = [
-    { label: "理解回答", detail: "提取技术点与个人贡献", icon: FileSearch, done: true },
-    { label: "证据核验", detail: "对照简历与前序回答", icon: ShieldCheck, done: hasEvaluation },
+    { label: "理解回答", detail: "提取技术点与个人贡献", icon: FileSearch, done: hasAnalysis },
     { label: "多维评分", detail: "生成六维评价与缺失点", icon: BrainCircuit, done: hasEvaluation },
+    { label: "证据核验", detail: "对照简历与前序回答", icon: ShieldCheck, done: hasEvidence },
     { label: "预期回答", detail: "整理强回答示例与追问方向", icon: Sparkles, done: hasCoaching },
   ]
 
@@ -822,6 +826,7 @@ function ScoreDisplay({ evaluation }: { evaluation: Record<string, unknown> }) {
     ...((evaluation.key_missing_points as string[]) || []),
     ...((evaluation.unsupported_claims as string[]) || []),
   ].filter((item, index, all) => item && all.indexOf(item) === index)
+  const scoringFailed = evaluation.scoring_failed === true
 
   let weightedScore = 0
   let totalWeight = 0
@@ -834,6 +839,21 @@ function ScoreDisplay({ evaluation }: { evaluation: Record<string, unknown> }) {
 
   return (
     <div style={{ display: "grid", gap: "0.8rem" }}>
+      {scoringFailed ? (
+        <div
+          style={{
+            padding: "0.85rem 0.95rem",
+            borderRadius: 12,
+            background: "var(--wj-error-bg)",
+            border: "1px solid var(--wj-error)",
+            color: "var(--wj-error)",
+            fontSize: "0.86rem",
+            lineHeight: 1.7,
+          }}
+        >
+          本次评分未能生成：模型返回的结果无法解析，评分数据已缺失。你可以在下一轮补充回答，问鉴会继续核验证据并给出分数。
+        </div>
+      ) : null}
       {total != null ? (
         <div style={{ display: "flex", alignItems: "baseline", gap: "0.35rem" }}>
           <span style={{ fontSize: "2rem", fontWeight: 700, color: "var(--wj-text-primary)" }}>{total}</span>
@@ -851,7 +871,7 @@ function ScoreDisplay({ evaluation }: { evaluation: Record<string, unknown> }) {
             </div>
           ))}
         </div>
-      ) : (
+      ) : scoringFailed ? null : (
         <div style={{ color: "var(--wj-text-secondary)", fontSize: "0.84rem" }}>评分数据仍在整理中。</div>
       )}
       {strengths.length ? <TextList title="回答亮点" items={strengths} color="var(--wj-success)" /> : null}

@@ -26,8 +26,10 @@ export function eventReducer(
       return {
         ...next,
         currentStage: "answering",
+        latestAnalysis: null,
         latestEvaluation: null,
         latestCoaching: null,
+        evidenceUpdated: false,
         currentQuestion: {
           question_id: payload.question_id,
           question_text: payload.question_text,
@@ -39,7 +41,14 @@ export function eventReducer(
       return { ...next, currentStage: "analyzing" }
 
     case "analysis.completed":
-      return { ...next, currentStage: "analyzing" }
+      return {
+        ...next,
+        currentStage: "analyzing",
+        latestAnalysis: (payload.analysis as Record<string, unknown>) || null,
+      }
+
+    case "evidence.updated":
+      return { ...next, currentStage: "analyzing", evidenceUpdated: true }
 
     case "scoring.completed":
       return {
@@ -70,7 +79,9 @@ export const initialState: InterviewRuntimeState = {
   lastSequence: 0,
   currentStage: "loading",
   currentQuestion: null,
+  latestAnalysis: null,
   latestEvaluation: null,
   latestCoaching: null,
+  evidenceUpdated: false,
   lastError: null,
 }

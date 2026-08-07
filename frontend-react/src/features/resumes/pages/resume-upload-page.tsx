@@ -1,8 +1,8 @@
 import { useState, useRef } from "react"
-import { useNavigate } from "react-router-dom"
 import { useUploadResumeFile, useUploadResumeText } from "../hooks/use-resumes"
 import { getResumeErrorMessage } from "../utils/error-mapping"
 import { ApiError } from "@/lib/api-client"
+import { PageHeader } from "@/components/common/page-header"
 import { usePageTitle } from "@/lib/use-page-title"
 
 const ALLOWED_EXTENSIONS = [".pdf", ".txt", ".tex"]
@@ -17,7 +17,6 @@ export default function ResumeUploadPage() {
   const [fileName, setFileName] = useState("")
   const [validationError, setValidationError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const navigate = useNavigate()
 
   const fileMutation = useUploadResumeFile()
   const textMutation = useUploadResumeText()
@@ -86,11 +85,13 @@ export default function ResumeUploadPage() {
   const isUploading = fileMutation.isPending || textMutation.isPending
 
   return (
-    <div style={{ maxWidth: 640, margin: "0 auto" }}>
-      <h2 style={{ fontSize: "1.25rem", fontWeight: 600, marginBottom: "0.25rem" }}>上传简历</h2>
-      <p style={{ color: "#64748b", fontSize: "0.85rem", marginBottom: "1rem" }}>
-        支持 PDF、TXT、TEX 格式，上传后问鉴会自动解析提取关键信息。
-      </p>
+    <div style={{ maxWidth: 720, margin: "0 auto" }}>
+      <PageHeader
+        title="上传简历"
+        description="支持 PDF、TXT、TEX 格式，上传后问鉴会自动解析提取关键信息。"
+        brand
+        back={{ to: "/app/resumes", label: "返回简历管理" }}
+      />
 
       {/* Tab switcher */}
       <div style={{ display: "flex", gap: 0, marginBottom: "1.5rem" }}>
@@ -276,20 +277,6 @@ export default function ResumeUploadPage() {
           </div>
         )}
       </div>
-
-      <button
-        onClick={() => navigate(-1)}
-        style={{
-          marginTop: "1rem",
-          padding: "0.5rem 1rem",
-          backgroundColor: "transparent",
-          color: "#64748b",
-          border: "none",
-          fontSize: "0.9rem",
-        }}
-      >
-        ← 返回
-      </button>
     </div>
   )
 }

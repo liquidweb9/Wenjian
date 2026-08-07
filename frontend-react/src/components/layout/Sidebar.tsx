@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from "react-router-dom"
-import { LayoutDashboard, FileText, MessageSquare, Target, BarChart3, Settings } from "lucide-react"
+import { LayoutDashboard, FileText, MessageSquare, Target, BarChart3 } from "lucide-react"
 import { useUIStore } from "@/stores/ui-store"
 import { BrandLogo } from "@/components/brand/BrandLogo"
 
@@ -9,7 +9,6 @@ const navItems = [
   { to: "/app/job-targets", label: "目标岗位", description: "定义岗位与能力需求", icon: Target },
   { to: "/app/interviews", label: "模拟面试", description: "开始、继续或查看记录", icon: MessageSquare },
   { to: "/app/analytics", label: "能力分析", description: "查看趋势与评估结果", icon: BarChart3 },
-  { to: "/app/settings", label: "设置", description: "偏好与系统选项", icon: Settings },
 ]
 
 export function Sidebar() {

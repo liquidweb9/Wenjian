@@ -1,5 +1,6 @@
 import React, { useState } from "react"
 import { useNavigate } from "react-router-dom"
+import { PageHeader } from "@/components/common/page-header"
 import {
   useJobTargetTemplates,
   useCreateJobTarget,
@@ -98,12 +99,12 @@ function JobTargetCreatePage() {
 
   return (
     <div style={styles.container}>
-      <div style={styles.header}>
-        <h1 style={styles.title}>创建目标岗位</h1>
-        <button onClick={() => navigate("/app/job-targets")} style={styles.cancelButton}>
-          取消
-        </button>
-      </div>
+      <PageHeader
+        title="创建目标岗位"
+        description="从模板、JD 解析或空白创建目标岗位，并配置能力需求，用于指导面试评估。"
+        brand
+        back={{ to: "/app/job-targets", label: "返回目标岗位" }}
+      />
 
       <div style={styles.stepIndicator}>
         <div style={{ ...styles.stepItem, ...(step === "template" ? styles.stepActive : {}) }}>
@@ -200,8 +201,13 @@ function JobTargetCreatePage() {
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
+                disabled={mode === "template"}
                 placeholder="例如：Java 后端工程师"
-                style={styles.input}
+                title={mode === "template" ? "预设模板的岗位名称不可修改" : undefined}
+                style={{
+                  ...styles.input,
+                  ...(mode === "template" ? styles.inputDisabled : {}),
+                }}
               />
             </div>
 
@@ -243,9 +249,6 @@ function JobTargetCreatePage() {
           />
 
           <div style={styles.actionRow}>
-            <button onClick={() => navigate("/app/job-targets")} style={styles.secondaryButton}>
-              取消
-            </button>
             <button
               onClick={handleSubmit}
               disabled={!title.trim() || requirements.length === 0 || createJobTarget.isPending}
@@ -277,30 +280,8 @@ function getLevelLabel(level: JobLevel): string {
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
-    padding: "32px",
     maxWidth: "1000px",
     margin: "0 auto",
-  },
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: "24px",
-  },
-  title: {
-    fontSize: "28px",
-    fontWeight: 600,
-    color: "#1a1a1a",
-    margin: 0,
-  },
-  cancelButton: {
-    padding: "8px 16px",
-    backgroundColor: "transparent",
-    color: "#666",
-    border: "1px solid #d1d5db",
-    borderRadius: "6px",
-    cursor: "pointer",
-    fontSize: "14px",
   },
   stepIndicator: {
     display: "flex",
@@ -451,6 +432,11 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "14px",
     border: "1px solid #d1d5db",
     borderRadius: "6px",
+  },
+  inputDisabled: {
+    backgroundColor: "#f3f4f6",
+    color: "#9ca3af",
+    cursor: "not-allowed",
   },
   select: {
     padding: "10px 14px",

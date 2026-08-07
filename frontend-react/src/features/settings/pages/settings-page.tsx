@@ -1,13 +1,25 @@
-import { usePreferenceStore } from "@/stores/preference-store"
+import { usePreferenceStore, type ModelTier } from "@/stores/preference-store"
+import { PageHeader } from "@/components/common/page-header"
 import { usePageTitle } from "@/lib/use-page-title"
+
+const modelTierLabels: Record<ModelTier, string> = {
+  auto: "自动（按任务路由）",
+  fast: "快速（fast）",
+  balanced: "均衡（balanced）",
+  judge: "深度判定（judge）",
+}
 
 export default function SettingsPage() {
   usePageTitle("/app/settings")
   const preferences = usePreferenceStore()
 
   return (
-    <div style={{ maxWidth: 640, margin: "0 auto" }}>
-      <h2 style={{ fontSize: "1.25rem", fontWeight: 600, marginBottom: "1.5rem" }}>设置</h2>
+    <div style={{ maxWidth: 720, margin: "0 auto" }}>
+      <PageHeader
+        title="设置"
+        description="配置默认面试偏好，设置会保存在本地，并在下次创建面试时自动生效。"
+        back={{ to: "/app/dashboard", label: "返回工作台" }}
+      />
 
       {/* Interview preferences */}
       <div style={sectionStyle}>
@@ -35,6 +47,24 @@ export default function SettingsPage() {
             onChange={(e) => preferences.setDefaultMaxTurns(Number(e.target.value))}
             style={{ ...selectStyle, width: 100 }}
           />
+        </div>
+
+        <div style={fieldStyle}>
+          <label style={labelStyle}>默认模型档位</label>
+          <select
+            value={preferences.defaultModelTier}
+            onChange={(e) => preferences.setDefaultModelTier(e.target.value as ModelTier)}
+            style={selectStyle}
+          >
+            {Object.entries(modelTierLabels).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+          <p style={{ fontSize: "0.78rem", color: "#64748b", lineHeight: 1.6, marginTop: "0.4rem" }}>
+            模型由平台统一配置，档位决定使用的模型能力：自动按任务路由，或固定使用某一档位。
+          </p>
         </div>
 
         <div style={fieldStyle}>

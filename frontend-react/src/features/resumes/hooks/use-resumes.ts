@@ -82,12 +82,36 @@ export function useConfirmRevision() {
       resumeId,
       revisionId,
       targetRole,
-    }: { resumeId: string; revisionId: string; targetRole: string }) =>
-      resumeApi.confirmRevision(resumeId, revisionId, targetRole),
+      jobTargetId,
+    }: {
+      resumeId: string
+      revisionId: string
+      targetRole: string
+      jobTargetId?: string | null
+    }) => resumeApi.confirmRevision(resumeId, revisionId, targetRole, jobTargetId),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: queryKeys.resumes.detail(vars.resumeId) })
       qc.invalidateQueries({ queryKey: queryKeys.resumes.claims(vars.resumeId) })
       qc.invalidateQueries({ queryKey: queryKeys.resumes.all })
+    },
+  })
+}
+
+export function useUpdateTargetRole() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      resumeId,
+      targetRole,
+      jobTargetId,
+    }: {
+      resumeId: string
+      targetRole: string
+      jobTargetId?: string | null
+    }) => resumeApi.updateResumeTargetRole(resumeId, { target_role: targetRole, job_target_id: jobTargetId }),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: queryKeys.resumes.detail(vars.resumeId) })
+      qc.invalidateQueries({ queryKey: queryKeys.resumes.claims(vars.resumeId) })
     },
   })
 }

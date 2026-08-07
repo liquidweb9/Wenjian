@@ -3,6 +3,8 @@ import { useParams, useNavigate, Link } from "react-router-dom"
 import { useResumeClaims, useUpdateClaim } from "../hooks/use-resumes"
 import { useJobTargets } from "@/features/job-target/hooks/use-job-targets"
 import type { JobTarget } from "@/lib/types/job-target"
+import { BackButton } from "@/components/common/back-button"
+import { PageHeader } from "@/components/common/page-header"
 
 const riskLabels: Record<string, string> = {
   UNVERIFIED_IMPROVEMENT: "未验证改进",
@@ -37,7 +39,7 @@ export default function ResumeClaimsPage() {
     return (
       <div style={{ padding: "2rem", textAlign: "center" }}>
         <p style={{ color: "#e63946" }}>加载主张失败</p>
-        <button onClick={() => navigate(`/app/resumes/${resumeId}/review`)}>返回</button>
+        <BackButton to={`/app/resumes/${resumeId}/review`} label="返回简历审阅" />
       </div>
     )
   }
@@ -61,73 +63,33 @@ export default function ResumeClaimsPage() {
 
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "1.5rem" }}>
-        <button
-          onClick={() => navigate(`/app/resumes/${resumeId}/profile`)}
-          style={{
-            padding: "0.4rem 0.8rem",
-            backgroundColor: "transparent",
-            color: "#64748b",
-            border: "1px solid #e2e8f0",
-            borderRadius: "6px",
-            fontSize: "0.85rem",
-            cursor: "pointer",
-          }}
-        >
-          ← 返回
-        </button>
-        <h2 style={{ fontSize: "1.25rem", fontWeight: 600 }}>技术主张</h2>
-        <span style={{ fontSize: "0.85rem", color: "#64748b" }}>
-          {claims.length} 条主张
-        </span>
-        <div style={{ marginLeft: "auto", display: "flex", gap: "0.6rem" }}>
-          <button
-            onClick={() => navigate(`/app/resumes/${resumeId}/ability-profile`)}
-            style={{
-              padding: "0.5rem 1rem",
-              backgroundColor: "transparent",
-              color: "#334155",
-              border: "1px solid #cbd5e1",
-              borderRadius: "6px",
-              fontSize: "0.85rem",
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
-            能力档案
-          </button>
-          <button
-            onClick={() => navigate(`/app/resumes/${resumeId}/training-plan`)}
-            style={{
-              padding: "0.5rem 1rem",
-              backgroundColor: "transparent",
-              color: "#334155",
-              border: "1px solid #cbd5e1",
-              borderRadius: "6px",
-              fontSize: "0.85rem",
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
-            训练计划
-          </button>
-          <button
-            onClick={() => setShowJobTargetSelector(!showJobTargetSelector)}
-            style={{
-              padding: "0.5rem 1rem",
-              backgroundColor: "#7c3aed",
-              color: "#ffffff",
-              border: "none",
-              borderRadius: "6px",
-              fontSize: "0.85rem",
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
-            分析能力缺口
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="技术主张"
+        description={`共 ${claims.length} 条主张，按风险与岗位相关性排序。`}
+        back={{ to: `/app/resumes/${resumeId}/profile`, label: "返回简历画像" }}
+        action={
+          <div style={{ display: "flex", gap: "0.6rem", alignItems: "center" }}>
+            <button
+              onClick={() => navigate(`/app/resumes/${resumeId}/ability-profile`)}
+              className="btn-secondary"
+            >
+              能力档案
+            </button>
+            <button
+              onClick={() => navigate(`/app/resumes/${resumeId}/training-plan`)}
+              className="btn-secondary"
+            >
+              训练计划
+            </button>
+            <button
+              onClick={() => setShowJobTargetSelector(!showJobTargetSelector)}
+              className="btn-primary"
+            >
+              分析能力缺口
+            </button>
+          </div>
+        }
+      />
 
       {/* Job Target Selector */}
       {showJobTargetSelector && (

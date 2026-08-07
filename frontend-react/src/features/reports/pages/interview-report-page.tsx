@@ -3,6 +3,7 @@ import { useState } from "react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { BrandMark } from "@/components/brand/BrandLogo"
+import { BackButton } from "@/components/common/back-button"
 import { EmptyState } from "@/components/common/empty-state"
 import { LoadingState } from "@/components/common/loading-state"
 import { useReport } from "../hooks/use-report"
@@ -68,6 +69,9 @@ export default function InterviewReportPage() {
 
   return (
     <div style={{ display: "grid", gap: "1rem" }}>
+      <div style={{ marginBottom: "0.25rem" }}>
+        <BackButton to="/app/interviews" label="返回面试记录" />
+      </div>
       <section className="app-surface" style={{ padding: "1.5rem 1.6rem" }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", alignItems: "flex-start" }}>
           <div style={{ display: "flex", gap: "0.95rem", alignItems: "flex-start" }}>

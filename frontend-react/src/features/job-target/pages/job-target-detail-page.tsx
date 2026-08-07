@@ -1,10 +1,15 @@
 import React from "react"
-import { useParams, useNavigate, Link } from "react-router-dom"
+import { useParams, useNavigate } from "react-router-dom"
+import { PageHeader } from "@/components/common/page-header"
+import { LoadingState } from "@/components/common/loading-state"
+import { ErrorState } from "@/components/common/error-state"
+import { usePageTitle } from "@/lib/use-page-title"
 import { useJobTarget, useUpdateJobTarget, useDeleteJobTarget } from "@/features/job-target/hooks/use-job-targets"
 import { RequirementEditor } from "@/features/job-target/components/requirement-editor"
 import type { JobLevel, InterviewRound, RequirementCreateRequest } from "@/lib/types/job-target"
 
 function JobTargetDetailPage() {
+  usePageTitle("", "目标岗位详情")
   const { jobTargetId } = useParams<{ jobTargetId: string }>()
   const navigate = useNavigate()
 
@@ -69,67 +74,52 @@ function JobTargetDetailPage() {
   }
 
   if (isLoading) {
-    return (
-      <div style={styles.container}>
-        <div style={styles.loadingText}>加载中...</div>
-      </div>
-    )
+    return <LoadingState message="问鉴正在加载目标岗位详情。" />
   }
 
   if (error || !jobTarget) {
     return (
-      <div style={styles.container}>
-        <div style={styles.errorBanner}>
-          加载失败: {error instanceof Error ? error.message : "未知错误"}
-        </div>
-        <Link to="/app/job-targets" style={styles.backLink}>
-          返回列表
-        </Link>
-      </div>
+      <ErrorState
+        title="目标岗位暂时无法加载"
+        message={error instanceof Error ? error.message : "请稍后重新尝试。"}
+      />
     )
   }
 
   return (
     <div style={styles.container}>
-      <div style={styles.breadcrumb}>
-        <Link to="/app/job-targets" style={styles.breadcrumbLink}>
-          目标岗位
-        </Link>
-        <span style={styles.breadcrumbSeparator}>/</span>
-        <span style={styles.breadcrumbCurrent}>{jobTarget.title}</span>
-      </div>
-
-      <div style={styles.header}>
-        <h1 style={styles.title}>{jobTarget.title}</h1>
-        <div style={styles.headerActions}>
-          {isEditing ? (
-            <>
-              <button onClick={() => setIsEditing(false)} style={styles.cancelButton}>
-                取消
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={updateJobTarget.isPending}
-                style={{
-                  ...styles.saveButton,
-                  ...(updateJobTarget.isPending && styles.buttonDisabled),
-                }}
-              >
-                {updateJobTarget.isPending ? "保存中..." : "保存"}
-              </button>
-            </>
-          ) : (
-            <>
-              <button onClick={handleDelete} style={styles.deleteButton}>
-                删除
-              </button>
-              <button onClick={() => setIsEditing(true)} style={styles.editButton}>
-                编辑
-              </button>
-            </>
-          )}
-        </div>
-      </div>
+      <PageHeader
+        title={jobTarget.title}
+        back={{ to: "/app/job-targets", label: "返回目标岗位" }}
+        action={
+          <div style={{ display: "flex", gap: "0.6rem" }}>
+            {isEditing ? (
+              <>
+                <button type="button" onClick={() => setIsEditing(false)} className="btn-secondary">
+                  取消
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={updateJobTarget.isPending}
+                  className="btn-primary"
+                >
+                  {updateJobTarget.isPending ? "保存中..." : "保存"}
+                </button>
+              </>
+            ) : (
+              <>
+                <button type="button" onClick={handleDelete} className="btn-danger">
+                  删除
+                </button>
+                <button type="button" onClick={() => setIsEditing(true)} className="btn-primary">
+                  编辑
+                </button>
+              </>
+            )}
+          </div>
+        }
+      />
 
       <div style={styles.metaRow}>
         <div style={styles.badge}>{getLevelLabel(jobTarget.level)}</div>
@@ -149,7 +139,12 @@ function JobTargetDetailPage() {
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                style={styles.input}
+                disabled={jobTarget.source === "template"}
+                title={jobTarget.source === "template" ? "预设模板的岗位名称不可修改" : undefined}
+                style={{
+                  ...styles.input,
+                  ...(jobTarget.source === "template" ? styles.inputDisabled : {}),
+                }}
               />
             </div>
 
@@ -285,86 +280,8 @@ function getSourceLabel(source: string): string {
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
-    padding: "32px",
     maxWidth: "1000px",
     margin: "0 auto",
-  },
-  breadcrumb: {
-    display: "flex",
-    alignItems: "center",
-    gap: "8px",
-    marginBottom: "24px",
-    fontSize: "14px",
-  },
-  breadcrumbLink: {
-    color: "#2563eb",
-    textDecoration: "none",
-  },
-  breadcrumbSeparator: {
-    color: "#9ca3af",
-  },
-  breadcrumbCurrent: {
-    color: "#6b7280",
-  },
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: "16px",
-  },
-  title: {
-    fontSize: "28px",
-    fontWeight: 600,
-    color: "#1a1a1a",
-    margin: 0,
-  },
-  headerActions: {
-    display: "flex",
-    gap: "12px",
-  },
-  editButton: {
-    padding: "10px 20px",
-    backgroundColor: "#2563eb",
-    color: "#ffffff",
-    border: "none",
-    borderRadius: "8px",
-    fontWeight: 500,
-    fontSize: "14px",
-    cursor: "pointer",
-  },
-  deleteButton: {
-    padding: "10px 20px",
-    backgroundColor: "#dc2626",
-    color: "#ffffff",
-    border: "none",
-    borderRadius: "8px",
-    fontWeight: 500,
-    fontSize: "14px",
-    cursor: "pointer",
-  },
-  cancelButton: {
-    padding: "10px 20px",
-    backgroundColor: "transparent",
-    color: "#666",
-    border: "1px solid #d1d5db",
-    borderRadius: "8px",
-    fontWeight: 500,
-    fontSize: "14px",
-    cursor: "pointer",
-  },
-  saveButton: {
-    padding: "10px 20px",
-    backgroundColor: "#2563eb",
-    color: "#ffffff",
-    border: "none",
-    borderRadius: "8px",
-    fontWeight: 500,
-    fontSize: "14px",
-    cursor: "pointer",
-  },
-  buttonDisabled: {
-    opacity: 0.5,
-    cursor: "not-allowed",
   },
   metaRow: {
     display: "flex",
@@ -384,25 +301,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "13px",
     color: "#9ca3af",
     marginLeft: "auto",
-  },
-  loadingText: {
-    textAlign: "center",
-    color: "#666",
-    fontSize: "16px",
-    padding: "60px 0",
-  },
-  errorBanner: {
-    padding: "16px",
-    backgroundColor: "#fef2f2",
-    color: "#991b1b",
-    borderRadius: "8px",
-    border: "1px solid #fecaca",
-    marginBottom: "16px",
-  },
-  backLink: {
-    color: "#2563eb",
-    textDecoration: "none",
-    fontSize: "14px",
   },
   editSection: {
     marginTop: "24px",
@@ -539,6 +437,11 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "14px",
     border: "1px solid #d1d5db",
     borderRadius: "6px",
+  },
+  inputDisabled: {
+    backgroundColor: "#f3f4f6",
+    color: "#9ca3af",
+    cursor: "not-allowed",
   },
   select: {
     padding: "10px 14px",

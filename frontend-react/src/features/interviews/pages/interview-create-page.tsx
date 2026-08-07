@@ -4,19 +4,18 @@ import { CheckCircle2, ChevronRight, ClipboardList, FileText, Target } from "luc
 import { useResumeList } from "@/features/resumes/hooks/use-resumes"
 import { useJobTargets } from "@/features/job-target/hooks/use-job-targets"
 import { useCreateInterview } from "../hooks/use-interviews"
-import { usePreferenceStore } from "@/stores/preference-store"
+import { usePreferenceStore, type ModelTier } from "@/stores/preference-store"
 import { EmptyState } from "@/components/common/empty-state"
 import { PageHeader } from "@/components/common/page-header"
 import { usePageTitle } from "@/lib/use-page-title"
 
-const steps = [
-  "选择简历",
-  "选择岗位目标（可选）",
-  "设置目标岗位名称",
-  "设置面试模式与轮次",
-  "补充岗位描述（可选）",
-  "开始模拟面试",
-]
+type StepStatus = "done" | "current" | "pending" | "skipped" | "ready"
+
+interface StepItem {
+  label: string
+  status: StepStatus
+  optional?: boolean
+}
 
 export default function InterviewCreatePage() {
   usePageTitle("/app/interviews/new")
@@ -33,6 +32,7 @@ export default function InterviewCreatePage() {
   const [jobDescription, setJobDescription] = useState("")
   const [mode, setMode] = useState(preferences.defaultMode)
   const [maxTurns, setMaxTurns] = useState(preferences.defaultMaxTurns)
+  const [modelTier, setModelTier] = useState<ModelTier>(preferences.defaultModelTier)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   const { data: resumesData, isLoading: resumesLoading } = useResumeList({
@@ -43,12 +43,38 @@ export default function InterviewCreatePage() {
 
   const confirmedResumes = useMemo(() => resumesData?.items ?? [], [resumesData])
 
+  const requiredChecks = [
+    Boolean(resumeId) && Boolean(revisionId),
+    Boolean(targetRole.trim()),
+    Boolean(mode) && maxTurns >= 3 && maxTurns <= 30,
+  ]
+  const firstIncomplete = requiredChecks.findIndex((ok) => !ok)
+
+  const steps: StepItem[] = [
+    { label: "选择简历", status: requiredChecks[0] ? "done" : firstIncomplete === 0 ? "current" : "pending" },
+    { label: "选择岗位目标（可选）", status: jobTargetId ? "done" : "skipped", optional: true },
+    { label: "设置目标岗位名称", status: requiredChecks[1] ? "done" : firstIncomplete === 1 ? "current" : "pending" },
+    { label: "设置面试模式与轮次", status: requiredChecks[2] ? "done" : firstIncomplete === 2 ? "current" : "pending" },
+    { label: "补充岗位描述（可选）", status: jobDescription.trim() ? "done" : "skipped", optional: true },
+    { label: "开始模拟面试", status: firstIncomplete === -1 ? "ready" : "pending" },
+  ]
+
+  function applyResumeTarget(selected: (typeof confirmedResumes)[number] | undefined) {
+    if (selected?.job_target_id) {
+      setJobTargetId(selected.job_target_id)
+      setTargetRole(selected.target_role || "")
+      const target = (jobTargets || []).find((jt) => jt.job_target_id === selected.job_target_id)
+      setJobDescription(target?.raw_jd || target?.description || "")
+    }
+  }
+
   useEffect(() => {
     if (preselectResumeId && confirmedResumes.length > 0) {
       const selected = confirmedResumes.find((resume) => resume.resume_id === preselectResumeId)
       if (selected?.latest_revision_id) {
         setRevisionId(selected.latest_revision_id)
       }
+      applyResumeTarget(selected)
     }
   }, [preselectResumeId, confirmedResumes])
 
@@ -66,6 +92,7 @@ export default function InterviewCreatePage() {
     setResumeId(nextResumeId)
     const selected = confirmedResumes.find((resume) => resume.resume_id === nextResumeId)
     setRevisionId(selected?.latest_revision_id ?? null)
+    applyResumeTarget(selected)
   }
 
   async function handleSubmit(event: React.FormEvent) {
@@ -80,6 +107,7 @@ export default function InterviewCreatePage() {
       job_target_id: jobTargetId || undefined,
       mode,
       max_turns: maxTurns,
+      model_tier: modelTier,
     })
   }
 
@@ -89,6 +117,7 @@ export default function InterviewCreatePage() {
         title="创建模拟面试"
         description="问鉴会根据你的简历、目标岗位和考察方向生成个性化面试计划。页面重点是配置真实训练输入，而不是展示空洞的宣传文案。"
         brand
+        back={{ to: "/app/interviews", label: "返回面试记录" }}
       />
 
       <div style={{ display: "grid", gridTemplateColumns: "0.7fr 1.3fr", gap: "1rem", alignItems: "start" }}>
@@ -98,27 +127,49 @@ export default function InterviewCreatePage() {
             创建流程
           </h2>
           <div style={{ display: "grid", gap: "0.7rem", marginTop: "1rem" }}>
-            {steps.map((step, index) => (
-              <div key={step} className="app-muted-surface" style={{ padding: "0.8rem 0.9rem", display: "flex", gap: "0.7rem", alignItems: "center" }}>
-                <div
-                  style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: 999,
-                    background: index < 4 ? "var(--wj-brand-accent-bg)" : "var(--wj-bg-surface)",
-                    color: index < 4 ? "var(--wj-brand-secondary)" : "var(--wj-text-secondary)",
-                    display: "grid",
-                    placeItems: "center",
-                    fontSize: "0.76rem",
-                    fontWeight: 700,
-                    border: "1px solid var(--wj-border-default)",
-                  }}
-                >
-                  {index + 1}
+            {steps.map((step, index) => {
+              const done = step.status === "done" || step.status === "ready"
+              const current = step.status === "current"
+              const skipped = step.status === "skipped"
+              return (
+                <div key={step.label} className="app-muted-surface" style={{ padding: "0.8rem 0.9rem", display: "flex", gap: "0.7rem", alignItems: "center" }}>
+                  <div
+                    style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: 999,
+                      background: done
+                        ? "var(--wj-brand-accent-bg)"
+                        : current
+                          ? "var(--wj-brand-secondary)"
+                          : "var(--wj-bg-surface)",
+                      color: current ? "#fff" : done ? "var(--wj-brand-secondary)" : "var(--wj-text-secondary)",
+                      display: "grid",
+                      placeItems: "center",
+                      fontSize: "0.76rem",
+                      fontWeight: 700,
+                      border: `1px solid ${current ? "var(--wj-brand-secondary)" : "var(--wj-border-default)"}`,
+                    }}
+                  >
+                    {step.status === "ready" ? <CheckCircle2 size={16} /> : done ? "✓" : index + 1}
+                  </div>
+                  <div style={{ display: "grid", gap: "0.1rem" }}>
+                    <span
+                      style={{
+                        color: current ? "var(--wj-brand-secondary)" : skipped ? "var(--wj-text-tertiary)" : "var(--wj-text-primary)",
+                        fontSize: "0.88rem",
+                        fontWeight: current ? 600 : 500,
+                      }}
+                    >
+                      {step.label}
+                    </span>
+                    {skipped ? (
+                      <span style={{ color: "var(--wj-text-tertiary)", fontSize: "0.72rem" }}>跳过（可选）</span>
+                    ) : null}
+                  </div>
                 </div>
-                <span style={{ color: "var(--wj-text-primary)", fontSize: "0.88rem", fontWeight: 500 }}>{step}</span>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </section>
 
@@ -151,7 +202,15 @@ export default function InterviewCreatePage() {
                 </Field>
 
                 <Field label="2. 岗位目标（可选）" description="选择已创建的岗位目标，系统将优先考察该岗位的能力缺口。">
-                  <select value={jobTargetId} onChange={(event) => setJobTargetId(event.target.value)} style={fieldInputStyle()}>
+                  <select
+                    value={jobTargetId}
+                    onChange={(event) => {
+                      setJobTargetId(event.target.value)
+                      const target = (jobTargets || []).find((jt) => jt.job_target_id === event.target.value)
+                      setJobDescription(target?.raw_jd || target?.description || "")
+                    }}
+                    style={fieldInputStyle()}
+                  >
                     <option value="">不选择岗位目标</option>
                     {(jobTargets || []).map((jobTarget) => (
                       <option key={jobTarget.job_target_id} value={jobTarget.job_target_id}>
@@ -192,9 +251,24 @@ export default function InterviewCreatePage() {
                 </Field>
               </div>
 
+              <div style={{ marginTop: "1rem" }}>
+                <Field label="5. 模型档位" description="模型由平台统一配置，档位决定使用哪一档模型。选择「自动」时按任务智能路由。">
+                  <select
+                    value={modelTier}
+                    onChange={(event) => setModelTier(event.target.value as ModelTier)}
+                    style={fieldInputStyle()}
+                  >
+                    <option value="auto">自动（按任务路由）</option>
+                    <option value="fast">快速（fast）</option>
+                    <option value="balanced">均衡（balanced）</option>
+                    <option value="judge">深度判定（judge）</option>
+                  </select>
+                </Field>
+              </div>
+
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginTop: "1rem" }}>
                 <Field
-                  label="5. 最大轮次"
+                  label="6. 最大轮次"
                   description="15 轮只是默认值，可设置 3–30 轮。系统会根据证据是否充分、回答深度与项目覆盖度决定继续追问或切换项目，也可能提前结束。"
                 >
                   <input
@@ -221,7 +295,7 @@ export default function InterviewCreatePage() {
                 </Field>
               </div>
 
-              <Field label="6. 岗位描述（可选）" description="补充 JD 后，问鉴会更容易聚焦岗位背景、技术栈和职责重点。">
+              <Field label="7. 岗位描述（可选）" description="补充 JD 后，问鉴会更容易聚焦岗位背景、技术栈和职责重点。">
                 <textarea
                   value={jobDescription}
                   onChange={(event) => setJobDescription(event.target.value)}
@@ -240,10 +314,7 @@ export default function InterviewCreatePage() {
                 </div>
               </section>
 
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "1.25rem", gap: "1rem" }}>
-                <button type="button" className="btn-secondary" onClick={() => navigate("/app/interviews")}>
-                  返回面试记录
-                </button>
+              <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", marginTop: "1.25rem", gap: "1rem" }}>
                 <div style={{ display: "grid", justifyItems: "end", gap: "0.45rem" }}>
                   <button type="submit" className="btn-primary" disabled={createInterview.isPending}>
                     {createInterview.isPending ? "正在创建面试…" : "确认并开始面试"}

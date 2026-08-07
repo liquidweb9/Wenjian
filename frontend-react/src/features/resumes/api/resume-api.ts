@@ -16,6 +16,8 @@ export interface ResumeSummary {
   status: string | null
   created_at: string | null
   latest_revision_id: string | null
+  job_target_id: string | null
+  target_role: string | null
 }
 
 export interface ResumeDetail {
@@ -32,6 +34,9 @@ export interface ResumeDetail {
   extraction_method: string | null
   parser_name: string | null
   parser_version: string | null
+  target_role: string | null
+  job_target_id: string | null
+  job_target_title: string | null
   profile: Record<string, unknown> | null
   created_at: string | null
 }
@@ -107,12 +112,31 @@ export async function updateRevision(resumeId: string, revisionId: string, norma
   return data
 }
 
-export async function confirmRevision(resumeId: string, revisionId: string, targetRole: string) {
+export async function confirmRevision(
+  resumeId: string,
+  revisionId: string,
+  targetRole: string,
+  jobTargetId?: string | null,
+) {
   const { data } = await api.post(
     `/resumes/${resumeId}/revisions/${revisionId}/confirm`,
     null,
-    { params: { target_role: targetRole }, timeout: 300_000 },
+    {
+      params: { target_role: targetRole, job_target_id: jobTargetId || undefined },
+      timeout: 300_000,
+    },
   )
+  return data
+}
+
+export async function updateResumeTargetRole(
+  resumeId: string,
+  body: { target_role: string; job_target_id?: string | null },
+) {
+  const { data } = await api.patch(`/resumes/${resumeId}/target-role`, {
+    target_role: body.target_role,
+    job_target_id: body.job_target_id || null,
+  })
   return data
 }
 

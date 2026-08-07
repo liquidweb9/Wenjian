@@ -31,7 +31,9 @@ export interface InterviewRuntimeState {
   lastSequence: number
   currentStage: InterviewStage
   currentQuestion: Record<string, unknown> | null
+  latestAnalysis: Record<string, unknown> | null
   latestEvaluation: Record<string, unknown> | null
   latestCoaching: Record<string, unknown> | null
+  evidenceUpdated: boolean
   lastError: string | null
 }

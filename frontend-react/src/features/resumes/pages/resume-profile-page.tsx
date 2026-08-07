@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
-import { ArrowLeft, FileText } from "lucide-react"
+import { FileText } from "lucide-react"
 import { useResume, useResumeClaims } from "../hooks/use-resumes"
 import { EmptyState } from "@/components/common/empty-state"
 import { LoadingState } from "@/components/common/loading-state"
@@ -47,12 +47,7 @@ export default function ResumeProfilePage() {
         title="简历画像"
         description="以文档式视角查看这份简历的结构化经历、技能与主张证据，决定下一轮面试如何发问。"
         brand
-        action={
-          <button type="button" className="btn-secondary" onClick={() => navigate(`/app/resumes/${resumeId}/review`)}>
-            <ArrowLeft size={16} />
-            返回简历审阅
-          </button>
-        }
+        back={{ to: `/app/resumes/${resumeId}/review`, label: "返回简历审阅" }}
       />
 
       <section className="app-surface" style={{ padding: "1.3rem 1.4rem", marginBottom: "1rem" }}>

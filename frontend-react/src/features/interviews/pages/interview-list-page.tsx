@@ -1,5 +1,7 @@
 import { useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
+import { Plus } from "lucide-react"
+import { PageHeader } from "@/components/common/page-header"
 import { useInterviewList } from "../hooks/use-interviews"
 import { usePageTitle } from "@/lib/use-page-title"
 
@@ -38,22 +40,16 @@ export default function InterviewListPage() {
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
-        <h2 style={{ fontSize: "1.25rem", fontWeight: 600 }}>面试记录</h2>
-        <Link
-          to="/app/interviews/new"
-          style={{
-            padding: "0.5rem 1.2rem",
-            backgroundColor: "#0d1b2a",
-            color: "#fff",
-            borderRadius: "6px",
-            textDecoration: "none",
-            fontSize: "0.9rem",
-          }}
-        >
-          新建面试
-        </Link>
-      </div>
+      <PageHeader
+        title="面试记录"
+        description="查看全部模拟面试与练习记录：继续未完成的面试，或查看已完成面试的评分与教练反馈。"
+        action={
+          <Link to="/app/interviews/new" className="btn-primary">
+            <Plus size={16} />
+            新建面试
+          </Link>
+        }
+      />
 
       {/* Filters */}
       <div style={{ display: "flex", gap: "0.75rem", marginBottom: "1rem", flexWrap: "wrap" }}>

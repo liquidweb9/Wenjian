@@ -69,7 +69,6 @@ export default function ResumeListPage() {
       <PageHeader
         title="简历管理"
         description="上传并确认真实简历，整理教育、项目、工作经历与主张证据，为后续模拟面试提供可靠输入。"
-        brand
         action={
           <Link to="/app/resumes/new" className="btn-primary">
             <Plus size={16} />

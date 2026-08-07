@@ -23,6 +23,8 @@ export const PAGE_TITLES: Record<string, string> = {
   "/app/interviews/new": "创建模拟面试",
   "/app/analytics": "能力分析",
   "/app/settings": "设置",
+  "/app/job-targets": "目标岗位",
+  "/app/job-targets/create": "创建目标岗位",
 }
 
 export function getDocumentTitle(path: string, custom?: string) {
