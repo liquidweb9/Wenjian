@@ -9,6 +9,7 @@
 - 分页从 1 开始。
 - 时间字段为 ISO 8601 字符串。
 - ID 是不透明字符串，调用方不应解析其内部格式。
+- 除 `/register`、`/login`、`/health` 外，其余接口均需 Bearer Token：`Authorization: Bearer <access_token>`。
 
 启动后可访问 FastAPI 自动文档：
 
@@ -77,7 +78,13 @@ X-Request-ID: 12-char-uuid
 | Method | Path | 作用 |
 | --- | --- | --- |
 | GET | `/health` | 健康检查 |
-| GET | `/me` | 当前用户占位接口 |
+| POST | `/register` | 注册账号 |
+| POST | `/login` | 登录并获取 Token |
+| GET | `/me` | 当前用户 |
+| DELETE | `/me` | 注销账号并删除数据 |
+| DELETE | `/resumes/{resume_id}` | 删除指定用户的简历 |
+| DELETE | `/interviews/{interview_id}` | 删除指定用户的面试 |
+| DELETE | `/job-targets/{job_target_id}` | 删除指定用户的岗位目标 |
 | GET | `/resumes` | 简历列表 |
 | POST | `/resumes` | 上传简历文件 |
 | POST | `/resumes/text` | 上传纯文本简历 |
@@ -87,7 +94,7 @@ X-Request-ID: 12-char-uuid
 | GET | `/resumes/{resume_id}/revisions` | Revision 历史 |
 | GET | `/resumes/{resume_id}/claims` | 获取 Claims |
 | PATCH | `/resumes/{resume_id}/claims/{claim_id}` | 更新 Claim |
-| DELETE | `/resumes/{resume_id}` | 删除简历及关联数据 |
+| PATCH | `/resumes/{resume_id}/target-role` | 保存/修改目标岗位（重新排序主张） |
 | GET | `/interviews` | 面试列表 |
 | POST | `/interviews` | 创建面试并生成第一题 |
 | GET | `/interviews/{interview_id}` | 面试详情与历史 |
@@ -96,6 +103,22 @@ X-Request-ID: 12-char-uuid
 | POST | `/interviews/{interview_id}/finish` | 主动结束并生成报告 |
 | GET | `/interviews/{interview_id}/report` | 获取报告 |
 | POST | `/interviews/{interview_id}/report/export` | 导出 JSON/Markdown |
+| GET | `/interviews/{interview_id}/questions/{question_id}/versions` | 回答版本历史（答案对比） |
+| GET | `/job-targets` | 岗位目标列表 |
+| POST | `/job-targets` | 创建岗位目标 |
+| POST | `/job-targets/parse-jd` | 解析 JD 生成能力需求 |
+| GET | `/job-targets/{job_target_id}` | 岗位目标详情 |
+| PATCH | `/job-targets/{job_target_id}` | 更新岗位目标 |
+| POST | `/claim-gap` | 触发能力缺口分析 |
+| GET | `/claim-gap/resume/{resume_id}/job-target/{job_target_id}` | 获取能力缺口分析结果 |
+| GET | `/evidence/verification-points/{claim_id}` | 主张的验证点与证据状态 |
+| GET | `/evidence/transitions/{verification_point_id}` | 验证点迁移历史 |
+| GET | `/evidence/contradictions/{interview_id}` | 面试矛盾列表 |
+| GET | `/evidence/evidence/{verification_point_id}` | 验证点证据片段 |
+| GET | `/abilities/profile/{resume_id}` | 跨场次能力档案 |
+| GET | `/training-plans` | 训练任务列表 |
+| POST | `/training-plans/{resume_id}/generate` | 生成训练计划 |
+| PATCH | `/training-plans/{task_id}` | 更新训练任务状态 |
 | GET | `/dashboard/summary` | 工作台汇总 |
 | GET | `/analytics/summary` | 能力与分数聚合 |
 | GET | `/analytics/trends` | 面试与分数趋势 |
@@ -115,21 +138,80 @@ X-Request-ID: 12-char-uuid
 }
 ```
 
-### GET `/me`
+## 4. 鉴权接口
 
-当前是占位实现：
+### POST `/register`
+
+请求：
 
 ```json
 {
-  "user_id": "anon",
-  "name": "Anonymous User",
-  "email": null
+  "email": "candidate@example.com",
+  "password": "secret123",
+  "full_name": "张三"
 }
 ```
 
-该接口不代表真实鉴权已经完成。
+预期返回：
 
-## 4. 简历接口
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIs...",
+  "token_type": "bearer"
+}
+```
+
+注册成功后即返回 Token，可直接用于后续请求。
+
+### POST `/login`
+
+请求：
+
+```json
+{
+  "email": "candidate@example.com",
+  "password": "secret123"
+}
+```
+
+预期返回与注册相同。
+
+### GET `/me`
+
+预期返回：
+
+```json
+{
+  "user_id": "usr_xxx",
+  "email": "candidate@example.com",
+  "full_name": "张三",
+  "is_active": true,
+  "is_verified": false,
+  "created_at": "2026-08-01T10:00:00",
+  "last_login_at": "2026-08-07T09:00:00"
+}
+```
+
+### DELETE `/me`
+
+注销账号并删除当前用户的全部数据。预期返回删除统计：
+
+```json
+{
+  "training_tasks": 2,
+  "ability_profiles": 1,
+  "ability_observations": 6,
+  "interviews": 4,
+  "resumes": 2,
+  "job_targets": 3,
+  "llm_calls_anonymized": 120,
+  "llm_calls_deleted": 5,
+  "user_deleted": true,
+  "message": "账号与关联数据已删除"
+}
+```
+
+## 5. 简历接口
 
 ### GET `/resumes`
 
@@ -387,6 +469,30 @@ Priority 范围 0–100。
 }
 ```
 
+### PATCH `/resumes/{resume_id}/target-role`
+
+保存或修改简历绑定的目标岗位，并让主张按新岗位重新排序（保留手动禁用的主张）。
+
+请求：
+
+```json
+{
+  "target_role": "高级后端工程师",
+  "job_target_id": "jt_xxx"
+}
+```
+
+预期返回：
+
+```json
+{
+  "resume_id": "res_xxx",
+  "target_role": "高级后端工程师",
+  "job_target_id": "jt_xxx",
+  "message": "目标岗位已保存，主张已按新岗位重新排序"
+}
+```
+
 ### GET `/resumes/{resume_id}/revisions`
 
 返回该简历的 Revision 历史，按创建时间倒序：
@@ -420,7 +526,7 @@ Priority 范围 0–100。
 
 该操作不可恢复，调用前应由 UI 二次确认。
 
-## 5. 面试接口
+## 6. 面试接口
 
 ### GET `/interviews`
 
@@ -431,6 +537,7 @@ Query：
 | `page` | 1 | 页码 |
 | `page_size` | 20 | 每页 1–100 |
 | `status` | null | `in_progress` / `finished` |
+| `mode` | null | `simulation` / `practice` |
 | `resume_id` | null | 按简历筛选 |
 | `sort_by` | `created_at` | 创建时间或状态 |
 | `sort_order` | `desc` | 排序方向 |
@@ -473,8 +580,10 @@ Query：
   "resume_revision_id": "rev_xxx",
   "target_role": "高级后端工程师",
   "job_description": "负责高并发服务和数据平台...",
+  "job_target_id": "jt_xxx",
   "mode": "simulation",
-  "max_turns": 20
+  "max_turns": 20,
+  "model_tier": "auto"
 }
 ```
 
@@ -483,6 +592,8 @@ Query：
 - Revision 存在。
 - Revision 状态为 `CONFIRMED`。
 - Profile 和 Claims 已生成。
+
+`mode` 取值 `simulation`（模拟面试）/ `practice`（练习模式）；`model_tier` 取值 `auto` / `fast` / `balanced` / `judge`。
 
 接口会立即运行 Graph 到第一处 Interrupt，并保存第一题。
 
@@ -662,7 +773,7 @@ History 会从持久化 Questions 和 Answers 进行兜底重建。
 }
 ```
 
-## 6. SSE 事件接口
+## 7. SSE 事件接口
 
 ### GET `/interviews/{interview_id}/events`
 
@@ -731,7 +842,7 @@ data: {"event_id":"...","event_type":"question.ready",...}
 - 未结束：`interview.initialized` + `question.ready`。
 - 已结束：`interview.finished`。
 
-## 7. 报告接口
+## 8. 报告接口
 
 ### GET `/interviews/{interview_id}/report`
 
@@ -791,7 +902,266 @@ data: {"event_id":"...","event_type":"question.ready",...}
 
 Markdown 当前是基础导出，包含总分、总结、能力、正文和建议。
 
-## 8. Dashboard 与 Analytics
+## 9. 岗位目标接口
+
+### GET `/job-targets`
+
+返回当前用户的全部岗位目标：
+
+```json
+[
+  {
+    "job_target_id": "jt_xxx",
+    "title": "Java 后端工程师",
+    "level": "mid",
+    "interview_round": "technical",
+    "description": "Java + Spring Boot 后端开发",
+    "source": "template",
+    "raw_jd": null,
+    "requirements": [
+      {
+        "requirement_id": "req_xxx",
+        "competency_code": "backend.language_runtime",
+        "title": "Java 语言与 JVM",
+        "description": "掌握 Java 核心特性与 JVM 调优",
+        "importance": 0.9,
+        "expected_level": 3,
+        "evidence_expectation": ["能说明 JVM 内存模型", "能分析线程安全问题"]
+      }
+    ],
+    "created_at": "2026-08-01T10:00:00"
+  }
+]
+```
+
+### POST `/job-targets`
+
+请求：
+
+```json
+{
+  "title": "Java 后端工程师",
+  "level": "mid",
+  "interview_round": "technical",
+  "description": "Java + Spring Boot 后端开发",
+  "source": "manual",
+  "requirements": [
+    {
+      "competency_code": "backend.language_runtime",
+      "title": "Java 语言与 JVM",
+      "importance": 0.9,
+      "expected_level": 3,
+      "evidence_expectation": ["能说明 JVM 内存模型", "能分析线程安全问题"]
+    }
+  ]
+}
+```
+
+`source` 取值 `template` / `pasted_jd` / `manual`；`level` 取值 `intern` / `junior` / `mid` / `senior` / `staff`；`interview_round` 取值 `resume` / `project` / `technical` / `system_design`。返回 201 与完整岗位对象。
+
+### POST `/job-targets/parse-jd`
+
+请求：
+
+```json
+{
+  "jd_text": "负责高并发服务的后端开发，要求熟练掌握 Java、Spring Boot 和 MySQL..."
+}
+```
+
+预期返回：
+
+```json
+{
+  "requirements": [
+    {
+      "competency_code": "backend.language_runtime",
+      "title": "Java 语言与 JVM",
+      "importance": 0.9,
+      "expected_level": 3,
+      "evidence_expectation": ["能说明 JVM 内存模型", "能进行性能调优"]
+    }
+  ],
+  "inferred_level": "mid",
+  "inferred_round": "technical"
+}
+```
+
+### GET `/job-targets/{job_target_id}` / PATCH `/job-targets/{job_target_id}`
+
+详情返回同 `GET /job-targets` 单项；PATCH 支持部分更新（不可将 `title` / `level` / `interview_round` / `source` 显式置空）。模板创建的岗位名称在 UI 中锁定为只读。
+
+## 10. 能力缺口分析接口
+
+### POST `/claim-gap`
+
+请求：
+
+```json
+{
+  "resume_id": "res_xxx",
+  "job_target_id": "jt_xxx"
+}
+```
+
+触发（或复用已缓存结果的）缺口分析。预期返回：
+
+```json
+{
+  "resume_id": "res_xxx",
+  "job_target_id": "jt_xxx",
+  "gaps": [
+    {
+      "gap_type": "UNCOVERED_REQUIREMENT",
+      "claim_id": null,
+      "requirement_id": "req_xxx",
+      "competency_code": "backend.cache",
+      "priority": 0.88,
+      "reason_codes": ["no_matching_claim"],
+      "explanation": "岗位要求缓存设计能力，简历中没有对应主张",
+      "claim_text": null,
+      "requirement_title": "缓存设计",
+      "requirement_importance": 0.85,
+      "requirement_expected_level": 3,
+      "claim_coverage_level": 0
+    }
+  ],
+  "coverage_stats": {
+    "total_requirements": 5,
+    "covered_requirements": 3,
+    "uncovered_requirements": 1,
+    "weak_evidence_count": 1,
+    "high_priority_gaps": 1,
+    "coverage_percentage": 60.0
+  },
+  "interview_plan": {},
+  "high_priority_targets": ["backend.cache"]
+}
+```
+
+`gap_type` 取值 `UNCOVERED_REQUIREMENT` / `WEAK_EVIDENCE` / `CONTRADICTED_CLAIM`。
+
+### GET `/claim-gap/resume/{resume_id}/job-target/{job_target_id}`
+
+获取已保存的缺口分析结果，结构同上；未分析时返回空结果。
+
+## 11. 证据接口
+
+### GET `/evidence/verification-points/{claim_id}`
+
+返回主张下的验证点及当前证据状态：
+
+```json
+{
+  "claim_id": "clm_xxx",
+  "verification_points": [
+    {
+      "verification_point_id": "vp_xxx",
+      "claim_id": "clm_xxx",
+      "competency_code": "backend.language_runtime",
+      "aspect": "线程安全分析",
+      "current_state": "VERIFIED",
+      "strength": 0.82,
+      "confidence": "high",
+      "evidence_count": 3,
+      "transition_count": 2,
+      "has_contradictions": false,
+      "created_at": "2026-08-01T10:00:00",
+      "updated_at": "2026-08-03T12:00:00"
+    }
+  ]
+}
+```
+
+证据状态取值 `UNSEEN` / `ADDRESSED` / `PARTIALLY_SUPPORTED` / `VERIFIED`。
+
+### GET `/evidence/transitions/{verification_point_id}`
+
+返回验证点状态迁移历史，每条含 `from_state` / `to_state` / `reason_code` / `answer_id` / `evidence_spans` / `policy_version`。
+
+### GET `/evidence/contradictions/{interview_id}`
+
+返回该面试中的矛盾记录（`contradiction_type` / `severity` / `clarification_question` / `conflicting_answers` / `resolution_status`）。
+
+### GET `/evidence/evidence/{verification_point_id}`
+
+返回验证点的证据片段列表（`start` / `end` / `text` / `quote_hash`）。
+
+## 12. 能力档案接口
+
+### GET `/abilities/profile/{resume_id}`
+
+聚合该简历在已完成的面试中的能力表现：
+
+```json
+{
+  "resume_id": "res_xxx",
+  "total_interviews": 3,
+  "competencies": [
+    {
+      "competency_code": "technical_correctness",
+      "profile": {
+        "average_score": 78.5,
+        "stability": "MEDIUM",
+        "sample_size": 3,
+        "trend": "stable",
+        "transfer_status": "VERIFIED"
+      },
+      "history": [
+        { "interview_id": "iv_001", "score": 75.0, "date": "2026-08-01" },
+        { "interview_id": "iv_002", "score": 82.0, "date": "2026-08-03" }
+      ]
+    }
+  ]
+}
+```
+
+`stability` 取值 `LOW` / `MEDIUM` / `HIGH`。
+
+## 13. 训练计划接口
+
+### GET `/training-plans`
+
+可选 Query：`resume_id`。返回当前用户的训练任务，按优先级倒序：
+
+```json
+[
+  {
+    "task_id": "tp_xxx",
+    "task_type": "EVIDENCE_COMPLETION",
+    "competency_code": "technical_correctness",
+    "title": "补充并发场景证据",
+    "description": "针对 Java 并发主张补充可验证的线上案例",
+    "completion_criteria": ["能复述线程池参数配置", "能给出一次线上调优记录"],
+    "status": "PENDING",
+    "priority": 0.9,
+    "resume_id": "res_xxx",
+    "interview_id": null,
+    "created_at": "2026-08-04T10:00:00",
+    "completed_at": null
+  }
+]
+```
+
+`task_type` 取值 `EVIDENCE_COMPLETION` / `CONCEPT_REVIEW` / `DEPTH_IMPROVEMENT` / `CONTRADICTION_RESOLUTION` / `FORM_DIVERSIFICATION` / `TRANSFER_PRACTICE`。
+
+### POST `/training-plans/{resume_id}/generate`
+
+按简历的证据缺口与能力短板生成训练任务。
+
+### PATCH `/training-plans/{task_id}`
+
+请求：
+
+```json
+{
+  "status": "COMPLETED"
+}
+```
+
+状态取值 `PENDING` / `IN_PROGRESS` / `COMPLETED` / `DISMISSED`。
+
+## 14. Dashboard 与 Analytics
 
 ### GET `/dashboard/summary`
 
@@ -851,19 +1221,25 @@ Markdown 当前是基础导出，包含总分、总结、能力、正文和建�
 }
 ```
 
-## 9. 客户端调用顺序
+## 15. 客户端调用顺序
 
 推荐端到端调用：
 
 ```text
-POST /resumes
+POST /register 或 POST /login（获取 access_token）
+  -> POST /resumes
   -> PATCH revision（可选）
   -> POST revision/confirm
   -> GET claims
   -> PATCH claim（可选）
-  -> POST /interviews
+  -> POST /job-targets（可选，或 /job-targets/parse-jd）
+  -> POST /claim-gap（可选，缺口分析）
+  -> POST /interviews（携带 job_target_id / model_tier）
   -> GET /interviews/{id}/events
   -> POST /interviews/{id}/answers（循环）
   -> GET /interviews/{id}（恢复/轮询）
   -> GET /interviews/{id}/report
+  -> GET /abilities/profile/{resume_id} / POST /training-plans/{resume_id}/generate（面试后分析）
 ```
+
+除 `/register`、`/login`、`/health` 外，所有请求需携带 `Authorization: Bearer <access_token>`。

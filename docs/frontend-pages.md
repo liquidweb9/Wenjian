@@ -14,22 +14,44 @@
 
 | 路由 | 页面 | 当前效果 |
 | --- | --- | --- |
-| `/login` | 登录占位页 | 品牌展示和进入应用；真实鉴权尚未实现 |
+| `/login` | 登录 | 真实鉴权（JWT），已登录自动跳转工作台 |
+| `/register` | 注册 | 创建账号后自动登录进入工作台 |
 | `/app/dashboard` | 工作台 | 汇总简历、待确认、面试、进行中记录和平均分 |
 | `/app/resumes` | 简历列表 | 分页、搜索、状态筛选、进入详情/上传 |
 | `/app/resumes/new` | 简历上传 | PDF/TXT/TEX 上传，展示解析进度和错误 |
 | `/app/resumes/:resumeId/review` | 解析检查 | 查看并修改标准化文本，确认 Revision |
 | `/app/resumes/:resumeId/profile` | Profile | 展示结构化教育、工作、项目、研究和技能 |
 | `/app/resumes/:resumeId/claims` | Claims | 查看面试主张、优先级、风险和验证点 |
+| `/app/resumes/:resumeId/ability-profile` | 能力档案 | 跨场次能力聚合、稳定性与迁移验证 |
+| `/app/resumes/:resumeId/training-plan` | 训练计划 | 生成/查看证据补强任务，支持复验 |
 | `/app/interviews` | 面试记录 | 列出进行中/已完成面试并继续或查看报告 |
-| `/app/interviews/new` | 创建面试 | 选择简历、岗位、模式、轮次、JD |
+| `/app/interviews/new` | 创建面试 | 选择简历、岗位、模式、轮次、JD、模型档位 |
 | `/app/interviews/:id/live` | 面试房间 | 实时问题、回答、历史、评分、Coaching、恢复 |
 | `/app/interviews/:id/report` | 面试报告 | 总结、能力、逐题、Claim、正文和导出 |
+| `/app/job-targets` | 目标岗位管理 | 岗位卡片列表、创建入口 |
+| `/app/job-targets/create` | 创建目标岗位 | 模板 / JD 解析 / 空白三种方式 |
+| `/app/job-targets/:jobTargetId` | 目标岗位详情 | 查看/编辑岗位与能力需求 |
+| `/app/claim-gap/:resumeId/:jobTargetId` | 能力缺口分析 | 简历声明与岗位需求覆盖对比 |
 | `/app/analytics` | 能力分析 | 分数分布、强弱项、Claim 验证率和趋势 |
-| `/app/settings` | 设置 | 默认模式、默认最大轮次和 UI 偏好 |
+| `/app/settings` | 设置 | 默认模式、默认最大轮次、模型档位、教练开关 |
 | `*` | 404 | 未找到页面 |
 
-## 3. 全局布局和品牌
+## 3. 页面页头与返回导航规范（统一模式）
+
+所有 `AppLayout` 下的页面统一使用共享 `PageHeader` 组件，规则如下：
+
+| 页面类型 | 页头形态 | 返回按钮 | Logo |
+| --- | --- | --- | --- |
+| 管理/列表页（工作台、简历管理、模拟面试、目标岗位、能力分析、设置） | `PageHeader`（标题 + 描述）+ 右上 `btn-primary` 创建按钮 | 无 | 无 |
+| 创建页（上传简历、创建面试、创建目标岗位） | `PageHeader`（brand + 标题 + 描述） | 左上角「返回列表」 | 有 |
+| 详情/分析页（解析确认、画像、主张、能力档案、训练计划、岗位详情、能力缺口） | `PageHeader`（brand + 标题 + 描述）+ `action` 槽 | 左上角「返回上一步」 | 有 |
+
+- 返回导航统一为 `BackButton` 组件（`components/common/back-button.tsx`）：箭头图标 + 文字，`alignSelf: "flex-start"` 防止在页头中拉伸。
+- 页面已移除自定义面包屑；顶部「Wenjian Workspace」+ 当前页标题由 `Topbar` 统一渲染，`PAGE_TITLES`（`lib/brand.ts`）维护标题映射。
+- 加载/错误/空态统一使用 `LoadingState` / `ErrorState` / `EmptyState` 共享组件。
+- 例外：面试房间（全屏三栏）与面试报告页保留自有头部布局。
+
+## 4. 全局布局和品牌
 
 ### 主应用
 
@@ -54,7 +76,7 @@
 
 Logo 使用品牌 SVG 中的 W + 对话/问题图形，提供浅色和深色背景版本。
 
-## 4. 创建面试页
+## 5. 创建面试页
 
 用户配置：
 
@@ -72,7 +94,7 @@ Logo 使用品牌 SVG 中的 W + 对话/问题图形，提供浅色和深色背�
 
 提交成功后自动导航到 Live Room。
 
-## 5. 面试房间
+## 6. 面试房间
 
 ### 三栏结构
 
@@ -137,7 +159,7 @@ coaching.complete_answer
 - 不是候选人已经陈述的项目事实。
 - 用户应使用自己的真实经历补全。
 
-## 6. SSE Runtime
+## 7. SSE Runtime
 
 ### 连接状态
 
@@ -166,7 +188,7 @@ idle -> connecting -> connected
 | `interview.finished` | 展示完成页 |
 | `report.ready` | 刷新详情并可进入报告 |
 
-## 7. 刷新、退出和重复提交保护
+## 8. 刷新、退出和重复提交保护
 
 ### 草稿
 
@@ -190,7 +212,7 @@ idle -> connecting -> connected
 - SSE 重连会收到当前 Question 或 Finished Snapshot。
 - 因此刷新、浏览器 Tab 挂起或短时丢事件不会只依赖单一实时连接。
 
-## 8. 报告与分析页
+## 9. 报告与分析页
 
 报告数据包括：
 
@@ -212,11 +234,10 @@ Analytics 页面聚合：
 - 每周面试数量。
 - 已完成面试分数趋势。
 
-## 9. 当前前端限制
+## 10. 当前前端限制
 
-- 没有真实登录态和权限控制。
 - SSE 不是 Token Streaming。
-- 页面主要使用 Inline Style，后续可继续抽取通用组件和响应式断点。
+- 页面主要使用 Inline Style，页头/导航/状态组件已抽取为共享组件，其余页面样式后续可继续抽取和加入响应式断点。
 - Live Room 三栏布局主要面向桌面端，移动端还需要专门的信息架构。
 - 尚未加入完整的 E2E、视觉回归和 Screen Reader 自动测试。
 

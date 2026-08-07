@@ -69,11 +69,11 @@ app/
 ├── llm/              # AgnesGateway (httpx → Agnes API), model router, retry, token budget
 ├── persistence/      # SQLAlchemy async models (29 tables), repositories, checkpoint saver
 ├── observability/    # structlog logging, metrics, tracing placeholders
-├── job_target/       # Phase 2: Job templates, JD parser, competency catalog
-├── planning/         # Phase 2: Claim-job mapper, gap analyzer, interview plan builder
-├── evidence/         # Phase 2: State machine, verification points, contradictions, evidence spans
-├── abilities/        # Phase 2: Observations, profiles, stability calculation, aggregation
-└── evals/            # Phase 2: Prompt/rubric versioning, golden datasets, regression testing
+├── job_target/       # Job templates, JD parser, competency catalog
+├── planning/         # Claim-job mapper, gap analyzer, interview plan builder
+├── evidence/         # State machine, verification points, contradictions, evidence spans
+├── abilities/        # Observations, profiles, stability calculation, aggregation
+└── evals/            # Prompt/rubric versioning, golden datasets, regression testing
 
 frontend-react/       # React 19 + TypeScript strict + Tailwind CSS 4
 └── src/
@@ -85,12 +85,12 @@ frontend-react/       # React 19 + TypeScript strict + Tailwind CSS 4
     └── features/
         ├── resumes/     # Upload, list, review, profile, claims pages + hooks + API layer
         ├── interviews/  # List, create, live room (SSE), hooks, event runtime, SSE client
-        ├── reports/     # Interview report with Phase 2.2 evidence visualization (JD Coverage, Unresolved Issues, Multi-form Verification)
+        ├── reports/     # Interview report with evidence visualization (JD Coverage, Unresolved Issues, Multi-form Verification)
         ├── claim-gap/   # Gap analysis API + hooks (job target requirement matching)
         ├── dashboard/   # Landing page with stats
         ├── analytics/   # Score distribution, abilities, trends
         ├── settings/    # Interview preferences
-        └── auth/        # Login placeholder
+        └── auth/        # Login / register / JWT session
 
 frontend-vue-archive/ # Original Vue 3 frontend (archived)
 ```
@@ -106,7 +106,7 @@ frontend-vue-archive/ # Original Vue 3 frontend (archived)
 - **Model tier routing**: `model_router.py` maps task names to fast/balanced/judge tiers (all same model in development).
 - **No ORM commits in repos**: Repositories use `add_*` patterns; transactions managed at the API router level.
 - **SSE via asyncio.Queue**: `SSEManager` in `sse_manager.py` maintains per-interview subscriber sets. Publishers push events to all subscribers' queues; each subscriber gets a dedicated `asyncio.Queue`.
-- **Phase 2 architecture** (completed 2026-08-03):
+- **Job-driven training architecture** (completed 2026-08-03):
   - **Job Target Catalog**: `JobTarget` table with competency requirements mapped to resume claims
   - **Evidence State Machine**: Verification points track UNSEEN → ADDRESSED → PARTIALLY_SUPPORTED → VERIFIED states with transition history
   - **Claim Gap Analysis**: `ClaimGapAnalyzer` identifies UNCOVERED_REQUIREMENT, WEAK_EVIDENCE, CONTRADICTED_CLAIM gaps with priority scoring
@@ -118,6 +118,7 @@ frontend-vue-archive/ # Original Vue 3 frontend (archived)
 
 - **Feature-based directory structure**: Each domain (resumes, interviews, reports, dashboard, analytics, settings, auth) is self-contained with its own `api/`, `hooks/`, `pages/`, and optionally `components/`.
 - **All inline CSS**: Uses `React.CSSProperties` objects declared at file bottom. No CSS modules, no styled-components, no Tailwind classes in JSX. Global styles in `globals.css`.
+- **Unified page headers & back navigation**: All pages use the shared `PageHeader` (title + description + optional `action`/`back`/`brand` props). Management/list pages: header + `btn-primary` create button, no logo, no back. Create/detail/analysis pages: header with `brand` logo + top-left `BackButton`. Loading/error/empty states use shared `LoadingState`/`ErrorState`/`EmptyState`. Template-created job targets keep the title read-only in the detail edit form. See `docs/frontend-pages.md` §3.
 - **Lazy-loaded routes**: All 14 page components are `React.lazy(() => import(...))` with a `<Suspense>` wrapper.
 - **TanStack Query key factory**: `queryKeys` in `lib/query-keys.ts` — structured, hierarchical keys (`resumes.list(filters)`, `interviews.detail(id)`, etc.). Filter params use `Record<string, any>` to accept typed parameter objects.
 - **Zustand with persist**: All 3 stores (`ui-store`, `interview-draft-store`, `preference-store`) use `persist` middleware with localStorage. Draft store keys are composite: `${interviewId}_${questionId}`.
@@ -126,7 +127,7 @@ frontend-vue-archive/ # Original Vue 3 frontend (archived)
 - **Idempotent answer submission**: `useSubmitAnswer` generates idempotency keys via `${interviewId}_${questionId}_${Date.now()}`.
 - **Answer drafts persisted**: `useInterviewDraftStore` saves partial answers to localStorage, keyed by interview+question.
 - **Axios with ApiError**: Request interceptor injects `X-Request-ID` (first 12 chars of UUID). Response interceptor normalizes backend error shape `{error: {code, message, request_id, field_errors}}` into `ApiError` class.
-- **Phase 2.2 Report Components** (completed 2026-08-04):
+- **Report evidence components** (completed 2026-08-04):
   - **ClaimPassport**: Shows claim verification status timeline with evidence links to specific Q&A
   - **JDCoverageSection**: Displays job requirement coverage (covered/uncovered/weak evidence), gap list with priority scores
   - **UnresolvedIssuesSection**: Lists contradictions with severity badges and weak verification points with evidence strength bars
@@ -209,5 +210,5 @@ cd frontend-react && pnpm dev
 - Vite dev server runs on port 5174 with `/api` proxy to `localhost:8000`
 - Frontend uses no component library — all components are hand-built with inline styles
 - Auth is functional (`POST /api/v1/register|login`, `GET /api/v1/me`, JWT bearer tokens); the axios client injects the token from the Zustand `auth-storage`
-- See `persistence/models.py` for all database tables (Phase 1: 14 core tables + Phase 2: 15 additional tables for job targets, evidence, abilities, contradictions, and training plans)
-- **Test Status** (2026-08-07): 599 passing / 0 failing — full backend suite green; all Phase 2 endpoints enforce user ownership (including dashboard/analytics, scoped per-user); claim extraction passes entry_id to the LLM so extracted claims are not discarded; tests run under `WJ_TEST_NULL_POOL=1` (set in `tests/conftest.py`) to avoid asyncpg cross-event-loop pooling
+- See `persistence/models.py` for all database tables (14 core tables + 15 additional tables for job targets, evidence, abilities, contradictions, and training plans)
+- **Test Status** (2026-08-07): 599 passing / 0 failing — full backend suite green; all endpoints enforce user ownership (including dashboard/analytics, scoped per-user); claim extraction passes entry_id to the LLM so extracted claims are not discarded; tests run under `WJ_TEST_NULL_POOL=1` (set in `tests/conftest.py`) to avoid asyncpg cross-event-loop pooling
